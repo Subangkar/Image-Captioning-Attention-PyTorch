@@ -1,5 +1,8 @@
 from collections import defaultdict
 import re 
+import os.path, sys
+sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+from project_enums import DatasetChoice
 
 
 class Flickr8kAudio:
@@ -12,18 +15,19 @@ class Flickr8kAudio:
     }
     audio_path = 'flickr_audio/wavs/'
 
-    def __init__(self, base_dataset_path='data/flickr8k/', dist_type='valid'):
+    def __init__(self, base_dataset_path='data/flickr8k/', dist_type=DatasetChoice.DEV.value):
 
 
         
         self.base_dataset_path = base_dataset_path
         ids_to_filter = None
         id_file = None
-        if dist_type == 'train':
+        print(DatasetChoice.TRAIN)
+        if dist_type == DatasetChoice.TRAIN.value:
             id_file = base_dataset_path  + Flickr8kAudio.dist_detail_path['train']
-        elif dist_type == 'test':
+        elif dist_type == DatasetChoice.TEST.value:
             id_file = base_dataset_path  + Flickr8kAudio.dist_detail_path['test']
-        elif dist_type == 'valid':
+        elif dist_type == DatasetChoice.DEV.value:
             id_file = base_dataset_path  + Flickr8kAudio.dist_detail_path['valid']
         else:
             print('provide valid type')
