@@ -6,7 +6,6 @@ from keras.layers import LSTM, Embedding, TimeDistributed, Dense, RepeatVector, 
     Dropout, BatchNormalization
 from keras.layers.wrappers import Bidirectional
 from keras.applications.inception_v3 import InceptionV3
-from keras.applications.resnet import ResNet50
 from keras.models import Model
 
 from utils import preprocess
@@ -14,8 +13,7 @@ from utils import preprocess
 
 class Encoder:
     def __init__(self):
-        # model = InceptionV3(weights='imagenet')
-        model = ResNet50(weights='imagenet')
+        model = InceptionV3(weights='imagenet')
         new_input = model.input
         hidden_layer = model.layers[-2].output
 
@@ -25,7 +23,7 @@ class Encoder:
     def encode(self, image_dset_path, image_dist_set):
         encoding_set = {}
         for image in tqdm(image_dist_set):
-            temp_enc = self.model.predict(preprocess(image, target_shape=(224, 224)))
+            temp_enc = self.model.predict(preprocess(image, target_shape=(299, 299)))
             encoding_set[image[len(image_dset_path):]] = np.reshape(temp_enc, temp_enc.shape[1])
         return encoding_set
 

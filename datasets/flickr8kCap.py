@@ -8,21 +8,17 @@ from utils import split_data
 
 
 class Flickr8k:
-    DATASET_BASE_PATH = 'data/flickr8k/'
+    def __init__(self, dataset_base_path='data/flickr8k/'):
 
-    token = DATASET_BASE_PATH + 'Flickr8k_text/Flickr8k.token.txt'
-    images = DATASET_BASE_PATH + 'Flicker8k_Dataset/'
-    # train_images_file = DATASET_BASE_PATH + 'Flickr8k_text/Flickr_8k.trainImages.txt'
-    # val_images_file = DATASET_BASE_PATH + 'Flickr8k_text/Flickr_8k.devImages.txt'
-    # test_images_file = DATASET_BASE_PATH + 'Flickr8k_text/Flickr_8k.testImages.txt'
+        self.token = dataset_base_path + 'Flickr8k_text/Flickr8k.token.txt'
+        self.images = dataset_base_path + 'Flicker8k_Dataset/'
 
-    dist_list = {
-        'train': DATASET_BASE_PATH + 'Flickr8k_text/Flickr_8k.trainImages.txt',
-        'val': DATASET_BASE_PATH + 'Flickr8k_text/Flickr_8k.devImages.txt',
-        'test': DATASET_BASE_PATH + 'Flickr8k_text/Flickr_8k.testImages.txt'
-    }
+        self.dist_list = {
+            'train': dataset_base_path + 'Flickr8k_text/Flickr_8k.trainImages.txt',
+            'val': dataset_base_path + 'Flickr8k_text/Flickr_8k.devImages.txt',
+            'test': dataset_base_path + 'Flickr8k_text/Flickr_8k.testImages.txt'
+        }
 
-    def __init__(self):
         self.img_fullpathlist = glob.glob(self.images + '*.jpg')
         self.imgname_to_caplist = self.__all_imgfilename_to_caplist_dict()
 
@@ -31,7 +27,7 @@ class Flickr8k:
         imgname_to_caplist = {}
         for i, row in enumerate(captions):
             row = row.split('\t')
-            row[0] = row[0][:len(row[0]) - 2]
+            row[0] = row[0][:len(row[0]) - 2]  # filename#0 caption
             if row[0] in imgname_to_caplist:
                 imgname_to_caplist[row[0]].append(row[1])
             else:
@@ -62,12 +58,11 @@ class Flickr8k:
         unique = []
         for i in words:
             unique.extend(i)
-        unique = list(set(unique))
+        vocab = sorted(list(set(unique)))
 
-        word2idx = {val: index for index, val in enumerate(unique)}
-        idx2word = {index: val for index, val in enumerate(unique)}
+        word2idx = {val: index for index, val in enumerate(vocab)}
+        idx2word = {index: val for index, val in enumerate(vocab)}
 
-        vocab = unique
         return vocab, word2idx, idx2word, max(map(lambda w: len(w), words))
 
     def get_generator(self, batch_size, encoding_train, imgfilename_to_caplist_dict, word2idx, vocab_size, max_len,
