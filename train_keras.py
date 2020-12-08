@@ -42,6 +42,7 @@ from models.keras.incepv3_bidirlstm import Encoder
 
 encoder = Encoder()
 encoding_train = encoder.encode(dset.images, train_img)
+encoding_valid = encoder.encode(dset.images, val_img)
 encoding_test = encoder.encode(dset.images, test_img)
 
 # %%
@@ -97,46 +98,60 @@ final_model.save(f"{MODEL_NAME}_ep{100}.h5")
 
 # %%
 
-# final_model = keras.models.load_model(f'{MODEL_NAME}''_best_train.h5')
+# model = keras.models.load_model(f'{MODEL_NAME}''_best_train.h5')
 model = final_model
 
 # %%
 
 try_image = train_img[100]
-# imshow(np.asarray(Image.open(try_image)))
 display(Image.open(try_image))
-print('Normal Max search:', predict_captions(try_image, encoding_test=encoding_train, final_model=model,
-                                             word2idx=word2idx, idx2word=idx2word,
-                                             images=dset.images, max_len=max_len))
-print('Beam Search, k=3:',
-      beam_search_predictions(try_image, beam_index=3, encoding_test=encoding_train, final_model=model,
-                              word2idx=word2idx, idx2word=idx2word,
-                              images=dset.images, max_len=max_len))
-print('Beam Search, k=5:',
-      beam_search_predictions(try_image, beam_index=5, encoding_test=encoding_train, final_model=model,
-                              word2idx=word2idx, idx2word=idx2word,
-                              images=dset.images, max_len=max_len))
-print('Beam Search, k=7:',
-      beam_search_predictions(try_image, beam_index=7, encoding_test=encoding_train, final_model=model,
-                              word2idx=word2idx, idx2word=idx2word,
-                              images=dset.images, max_len=max_len))
+print('Normal Max search:', greedy_predictions_gen(encoding_dict=encoding_train, model=model,
+                                                   word2idx=word2idx, idx2word=idx2word,
+                                                   images=dset.images, max_len=max_len)(try_image))
+for k in [3, 5, 7]:
+    print(f'Beam Search, k={k}:',
+          beam_search_predictions_gen(beam_index=k, encoding_dict=encoding_train, model=model,
+                                      word2idx=word2idx, idx2word=idx2word,
+                                      images=dset.images, max_len=max_len)(try_image))
+
+# %%
+
+try_image = val_img[4]
+display(Image.open(try_image))
+print('Normal Max search:', greedy_predictions_gen(encoding_dict=encoding_valid, model=model,
+                                                   word2idx=word2idx, idx2word=idx2word,
+                                                   images=dset.images, max_len=max_len)(try_image))
+for k in [3, 5, 7]:
+    print(f'Beam Search, k={k}:',
+          beam_search_predictions_gen(beam_index=k, encoding_dict=encoding_valid, model=model,
+                                      word2idx=word2idx, idx2word=idx2word,
+                                      images=dset.images, max_len=max_len)(try_image))
 
 # %%
 
 try_image = test_img[4]
 display(Image.open(try_image))
-print('Normal Max search:', predict_captions(try_image, encoding_test=encoding_train, final_model=model,
-                                             word2idx=word2idx, idx2word=idx2word,
-                                             images=dset.images, max_len=max_len))
-print('Beam Search, k=3:',
-      beam_search_predictions(try_image, beam_index=3, encoding_test=encoding_test, final_model=model,
-                              word2idx=word2idx, idx2word=idx2word,
-                              images=dset.images, max_len=max_len))
-print('Beam Search, k=5:',
-      beam_search_predictions(try_image, beam_index=5, encoding_test=encoding_test, final_model=model,
-                              word2idx=word2idx, idx2word=idx2word,
-                              images=dset.images, max_len=max_len))
-print('Beam Search, k=7:',
-      beam_search_predictions(try_image, beam_index=7, encoding_test=encoding_test, final_model=model,
-                              word2idx=word2idx, idx2word=idx2word,
-                              images=dset.images, max_len=max_len))
+print('Normal Max search:', greedy_predictions_gen(encoding_dict=encoding_test, model=model,
+                                                   word2idx=word2idx, idx2word=idx2word,
+                                                   images=dset.images, max_len=max_len)(try_image))
+for k in [3, 5, 7]:
+    print(f'Beam Search, k={k}:',
+          beam_search_predictions_gen(beam_index=k, encoding_dict=encoding_test, model=model,
+                                      word2idx=word2idx, idx2word=idx2word,
+                                      images=dset.images, max_len=max_len)(try_image))
+
+# %%
+
+print("BLEU Scores:")
+print("\tTrain")
+print_eval_metrics(img_cap_dict=train_d, encoding_dict=encoding_train, model=model,
+                   word2idx=word2idx, idx2word=idx2word,
+                   images=dset.images, max_len=max_len)
+print("\tValidation")
+print_eval_metrics(img_cap_dict=val_d, encoding_dict=encoding_valid, model=model,
+                   word2idx=word2idx, idx2word=idx2word,
+                   images=dset.images, max_len=max_len)
+print("\tTest")
+print_eval_metrics(img_cap_dict=test_d, encoding_dict=encoding_test, model=model,
+                   word2idx=word2idx, idx2word=idx2word,
+                   images=dset.images, max_len=max_len)
