@@ -43,7 +43,7 @@ class Decoder:
             Bidirectional(LSTM(256, return_sequences=True)),
             Dropout(0.5),
             BatchNormalization(),
-            TimeDistributed(Dense(300))
+            TimeDistributed(Dense(embedding_size))
         ])
 
     def get_model(self):
@@ -53,10 +53,10 @@ class Decoder:
         image_in = Input(shape=(2048,))
         caption_in = Input(shape=(self.max_len,))
 
-        merged = Concatenate()([image_model(image_in), caption_model(caption_in)])
-        merged = Dropout(0.5)(merged)
-        merged = BatchNormalization()(merged)
-        latent = Bidirectional(LSTM(1000, return_sequences=False))(merged)
-        out = Dense(self.vocab_size, activation='softmax')(latent)
+        X = Concatenate()([image_model(image_in), caption_model(caption_in)])
+        X = Dropout(0.5)(X)
+        X = BatchNormalization()(X)
+        X = Bidirectional(LSTM(1000, return_sequences=False))(X)
+        out = Dense(self.vocab_size, activation='softmax')(X)
 
         return Model([image_in, caption_in], out)

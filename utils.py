@@ -99,7 +99,7 @@ def split_data(l, img, images):
 def get_bleu_score(img_to_caplist_dict, caption_gen_func):
     bleu_score = 0.0
     for k, v in tqdm(img_to_caplist_dict.items()):
-        candidate = caption_gen_func(k).split()[1:-1]
+        candidate = caption_gen_func(k).split()
         references = [s.split() for s in v]
         bleu_score += sentence_bleu(references, candidate)
     return bleu_score / len(img_to_caplist_dict)
