@@ -1,27 +1,11 @@
-import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 import glob
 import pandas as pd
 import io
 
-from utils import split_data
-
-
-def padding_tensor(sequences, maxlen):
-    """
-    :param sequences: list of tensors
-    :param maxlen: fixed length of output tensors
-    :return:
-    """
-    num = len(sequences)
-    # max_len = max([s.size(0) for s in sequences])
-    out_dims = (num, maxlen)
-    out_tensor = sequences[0].data.new(*out_dims).fill_(0)
-    for i, tensor in enumerate(sequences):
-        length = tensor.size(0)
-        out_tensor[i, :length] = tensor
-    return out_tensor
+from utils_torch import split_data
+from utils_torch import padding_tensor
 
 
 class Flickr8kDataset(Dataset):

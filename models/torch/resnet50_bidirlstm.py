@@ -6,7 +6,7 @@ import torchvision
 from tqdm import tqdm
 
 from models.torch import layers
-from utils import preprocess
+from utils_torch import preprocess
 
 
 class Encoder(nn.Module):
@@ -24,9 +24,10 @@ class Encoder(nn.Module):
     def encode(self, image_dset_path, image_dist_set, batch_size=32, device=torch.device('cpu')):
         encoding_set = {}
         for image in tqdm(image_dist_set):
-            temp_enc = self(torch.Tensor(
-                preprocess(image, target_shape=(299, 299)).reshape(-1, 3, 299, 299)).to(device=device))
-            encoding_set[image[len(image_dset_path):]] = torch.reshape(temp_enc, shape=(-1, temp_enc.shape[1]))
+            # (h,w) -> (1,3,h,w)
+            temp_enc = self(preprocess(image, target_shape=(299, 299)))
+            # (1,3,h,w) -> (2048,)
+            encoding_set[image[len(image_dset_path):]] = torch.reshape(temp_enc, shape=(temp_enc.shape[1],))
         return encoding_set
 
 

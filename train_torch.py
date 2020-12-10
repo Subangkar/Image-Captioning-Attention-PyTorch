@@ -4,8 +4,9 @@ import math
 from IPython.core.display import display
 from PIL import Image
 import torch
+from tqdm import trange
 
-from utils import *
+from utils_torch import *
 from datasets.flickr8k import Flickr8kDataset
 
 # %%
@@ -48,12 +49,10 @@ def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wan
     running_acc = 0
     running_loss = 0.0
 
-    for batch_idx in tqdm(range(steps_per_epoch)):
+    t = trange(steps_per_epoch, leave=True)
+    for batch_idx in t:  # enumerate(iter(steps_per_epoch)):
         batch = next(train_generator)
         (enc, cap_in, next_word) = batch
-        enc = torch.Tensor(enc).to(device)
-        cap_in = torch.Tensor(cap_in).to(device)
-        next_word = torch.Tensor(next_word).to(device)
 
         optimizer.zero_grad()
         output = model(enc, cap_in)
@@ -63,6 +62,7 @@ def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wan
 
         # running_acc += torch.mean(output == next_word)
         running_loss += loss.item()
+        t.set_postfix({'loss': running_loss / (batch_idx + 1)}, refresh=True)
 
     return model, running_loss
 
@@ -79,14 +79,14 @@ encoding_test = encoder.encode(dset.images, test_img, device=device)
 # %%
 
 BATCH_SIZE = 256
-MODEL_NAME = f'saved_models/IncepV3_bidirlstm_b{BATCH_SIZE}'
+MODEL_NAME = f'saved_models/resnet50_bidirlstm_emd200_b{BATCH_SIZE}'
 steps_per_epoch = int(math.ceil(samples_per_epoch / BATCH_SIZE))
 
 # %%
 
 from models.torch.resnet50_bidirlstm import Decoder
 
-final_model = Decoder(embedding_size=300, vocab_size=vocab_size, max_len=max_len).to(device=device)
+final_model = Decoder(embedding_size=200, vocab_size=vocab_size, max_len=max_len).to(device=device)
 optimizer = torch.optim.Adam(final_model.parameters(), lr=1E-3)
 loss_fn = torch.nn.CrossEntropyLoss()
 
@@ -96,6 +96,7 @@ train_generator = dset.get_generator(batch_size=BATCH_SIZE, random_state=None, d
                                      word2idx=word2idx, max_len=max_len)
 train_loss_min = 100
 for epoch in range(5):
+    print(f'Epoch {epoch:02d}/{5:d}')
     final_model.train()
     final_model, train_loss = train_model(model=final_model, optimizer=optimizer, loss_fn=loss_fn,
                                           train_generator=train_generator, steps_per_epoch=steps_per_epoch)
