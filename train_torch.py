@@ -1,103 +1,113 @@
-# %%
+#%%
 import math
 
 from IPython.core.display import display
 from PIL import Image
-import keras
+import torch
 
 from utils import *
-from datasets.flickr8kCap import Flickr8k
+from datasets.flickr8k import Flickr8kDataset
 
-# %%
+#%%
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+#%%
 
 DATASET_BASE_PATH = 'data/flickr8k/'
 
-# %%
-dset = Flickr8k(dataset_base_path=DATASET_BASE_PATH)
+#%%
+dset = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH)
 
-train_img = dset.get_imgpathlist(dist='train')
-val_img = dset.get_imgpathlist(dist='val')
-test_img = dset.get_imgpathlist(dist='test')
+train_img = dset.get_imgpath_list(dist='train')
+val_img = dset.get_imgpath_list(dist='val')
+test_img = dset.get_imgpath_list(dist='test')
 len(train_img), len(val_img), len(test_img)
 
-# %%
+#%%
 
 train_d = dset.imgfilename_to_caplist_dict(img_path_list=train_img)
 val_d = dset.imgfilename_to_caplist_dict(img_path_list=val_img)
 test_d = dset.imgfilename_to_caplist_dict(img_path_list=test_img)
 len(train_d), len(val_d), len(test_d)
 
-# %%
+#%%
 
 caps = dset.add_start_end_seq(train_d)
 vocab, word2idx, idx2word, max_len = dset.construct_vocab(caps=caps)
 vocab_size = len(vocab)
 vocab_size, max_len
 
-# %%
+#%%
 
 samples_per_epoch = sum(map(lambda cap: len(cap.split()) - 1, caps))
 samples_per_epoch
 
-# %%
+#%%
+def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wandb_log=False):
+    running_acc = 0
+    running_loss = 0.0
 
-from models.keras.incepv3_bidirlstm import Encoder
+    for batch_idx in tqdm(range(steps_per_epoch)):
+        batch = next(train_generator)
+        (enc, cap_in, next_word) = batch
+        enc = torch.Tensor(enc).to(device)
+        cap_in = torch.Tensor(cap_in).to(device)
+        next_word = torch.Tensor(next_word).to(device)
 
-encoder = Encoder()
-encoding_train = encoder.encode(dset.images, train_img)
-encoding_valid = encoder.encode(dset.images, val_img)
-encoding_test = encoder.encode(dset.images, test_img)
+        optimizer.zero_grad()
+        output = model(enc, cap_in)
+        loss = loss_fn(output, next_word)
+        loss.backward()
+        optimizer.step()
 
-# %%
+        # running_acc += torch.mean(output == next_word)
+        running_loss += loss.item()
 
-from models.keras.incepv3_bidirlstm import Decoder
+    return model, running_loss
 
-final_model = Decoder(embedding_size=300, vocab_size=vocab_size, max_len=max_len).get_model()
-opt = keras.optimizers.Adam(learning_rate=1e-3)
-final_model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
-final_model.summary()
+#%%
 
-# %%
+from models.torch.resnet50_bidirlstm import Encoder
+
+encoder = Encoder().to(device=device)
+encoding_train = encoder.encode(dset.images, train_img, device=device)
+encoding_valid = encoder.encode(dset.images, val_img, device=device)
+encoding_test = encoder.encode(dset.images, test_img, device=device)
+
+#%%
 
 BATCH_SIZE = 256
 MODEL_NAME = f'saved_models/IncepV3_bidirlstm_b{BATCH_SIZE}'
 steps_per_epoch = int(math.ceil(samples_per_epoch / BATCH_SIZE))
 
-# %%
+#%%
 
-final_model.fit(
-    x=dset.get_generator(batch_size=BATCH_SIZE, random_state=None,
-                         encoding_train=encoding_train, imgfilename_to_caplist_dict=train_d,
-                         word2idx=word2idx, vocab_size=vocab_size, max_len=max_len),
-    steps_per_epoch=steps_per_epoch,
-    epochs=50,
-    callbacks=[
-        keras.callbacks.ModelCheckpoint(
-            f'{MODEL_NAME}''_ep{epoch:02d}_weights.h5',
-            save_weights_only=True, period=20),
-        keras.callbacks.EarlyStopping(patience=10, monitor='loss'),
-        keras.callbacks.ModelCheckpoint(f'{MODEL_NAME}''_best_train.h5', monitor='loss',
-                                        save_best_only=True, mode='min'),
-    ])
-final_model.save(f"{MODEL_NAME}_ep{50}.h5")
+from models.torch.resnet50_bidirlstm import Decoder
 
-# %%
+final_model = Decoder(embedding_size=300, vocab_size=vocab_size, max_len=max_len).to(device=device)
+optimizer = torch.optim.Adam(final_model.parameters(), lr=1E-3)
+loss_fn = torch.nn.CrossEntropyLoss()
 
-final_model.fit(
-    x=dset.get_generator(batch_size=BATCH_SIZE, random_state=None,
-                         encoding_train=encoding_train, imgfilename_to_caplist_dict=train_d,
-                         word2idx=word2idx, vocab_size=vocab_size, max_len=max_len),
-    steps_per_epoch=steps_per_epoch,
-    epochs=100, initial_epoch=50,
-    callbacks=[
-        keras.callbacks.ModelCheckpoint(
-            f'{MODEL_NAME}''_ep{epoch:02d}_weights.h5',
-            save_weights_only=True, period=10),
-        keras.callbacks.EarlyStopping(patience=5, monitor='loss'),
-        keras.callbacks.ModelCheckpoint(f'{MODEL_NAME}''_best_train.h5', monitor='loss',
-                                        save_best_only=True, mode='min'),
-    ])
-final_model.save(f"{MODEL_NAME}_ep{100}.h5")
+#%%
+train_generator = dset.get_generator(batch_size=BATCH_SIZE, random_state=None,
+                                     encoding_train=encoding_train, imgfilename_to_caplist_dict=train_d,
+                                     word2idx=word2idx, vocab_size=vocab_size, max_len=max_len)
+train_loss_min = 100
+for epoch in range(5):
+    final_model.train()
+    final_model, train_loss = train_model(model=final_model, optimizer=optimizer, loss_fn=loss_fn,
+                                          train_generator=train_generator, steps_per_epoch=steps_per_epoch)
+    state = {
+        'epoch': epoch + 1,
+        'state_dict': final_model.state_dict(),
+        'optimizer': optimizer.state_dict()
+    }
+    if (epoch + 1) % 2 == 0:
+        torch.save(state, f'{MODEL_NAME}''_ep{epoch:02d}_weights.pt')
+    if train_loss < train_loss_min:
+        train_loss_min = train_loss
+        torch.save(state, f'{MODEL_NAME}''_best_train.pt')
+torch.save(final_model, f'{MODEL_NAME}''_ep{05}_weights.pt')
 
 # %%
 
