@@ -1,10 +1,27 @@
 import numpy as np
+import torch
 from torch.utils.data import Dataset, DataLoader
 import glob
 import pandas as pd
 import io
 
 from utils import split_data
+
+
+def padding_tensor(sequences, maxlen):
+    """
+    :param sequences: list of tensors
+    :param maxlen: fixed length of output tensors
+    :return:
+    """
+    num = len(sequences)
+    # max_len = max([s.size(0) for s in sequences])
+    out_dims = (num, maxlen)
+    out_tensor = sequences[0].data.new(*out_dims).fill_(0)
+    for i, tensor in enumerate(sequences):
+        length = tensor.size(0)
+        out_tensor[i, :length] = tensor
+    return out_tensor
 
 
 class Flickr8kDataset(Dataset):
@@ -78,8 +95,8 @@ class Flickr8kDataset(Dataset):
     def __len__(self):
         return len(self.imgpath_to_caplist)
 
-    def get_generator(self, batch_size, encoding_train, imgpath_to_caplist_dict, word2idx, vocab_size, max_len,
-                      random_state=17):
+    def get_generator(self, batch_size, encoding_train, imgpath_to_caplist_dict, word2idx, max_len,
+                      random_state=17, device=torch.device('cpu')):
         # ----- Forming a df to sample from ------
         l = ["image_id\tcaptions\n"]
         for key, val in imgpath_to_caplist_dict.items():
@@ -111,23 +128,20 @@ class Flickr8kDataset(Dataset):
                     count += 1
 
                     partial = [word2idx[txt] for txt in text.split()[:i + 1]]
-                    partial_caps.append(partial)
+                    partial_caps.append(torch.LongTensor(partial))
 
                     # Initializing with zeros to create a one-hot encoding matrix
                     # This is what we have to predict
-                    # Hence initializing it with vocab_size length
-                    n = np.zeros(vocab_size)
                     # Setting the next word to 1 in the one-hot encoded matrix
-                    n[word2idx[text.split()[i + 1]]] = 1
-                    next_words.append(n)
+                    next_words.append(word2idx[text.split()[i + 1]])
 
                     images.append(current_image)
 
                     if count >= batch_size:
-                        next_words = np.asarray(next_words)
-                        images = np.asarray(images)
-                        partial_caps = sequence.pad_sequences(partial_caps, maxlen=max_len, padding='post')
-                        yield [images, partial_caps], next_words
+                        images = torch.Tensor(images).to(device=device)
+                        partial_caps = padding_tensor(partial_caps, maxlen=max_len).to(device=device)
+                        next_words = torch.LongTensor(next_words).to(device=device)
+                        yield images, partial_caps, next_words
                         partial_caps = []
                         next_words = []
                         images = []

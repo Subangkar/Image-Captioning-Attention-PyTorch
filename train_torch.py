@@ -1,4 +1,4 @@
-#%%
+# %%
 import math
 
 from IPython.core.display import display
@@ -8,14 +8,14 @@ import torch
 from utils import *
 from datasets.flickr8k import Flickr8kDataset
 
-#%%
+# %%
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-#%%
+# %%
 
 DATASET_BASE_PATH = 'data/flickr8k/'
 
-#%%
+# %%
 dset = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH)
 
 train_img = dset.get_imgpath_list(dist='train')
@@ -23,26 +23,27 @@ val_img = dset.get_imgpath_list(dist='val')
 test_img = dset.get_imgpath_list(dist='test')
 len(train_img), len(val_img), len(test_img)
 
-#%%
+# %%
 
 train_d = dset.get_imgpath_to_caplist_dict(img_path_list=train_img)
 val_d = dset.get_imgpath_to_caplist_dict(img_path_list=val_img)
 test_d = dset.get_imgpath_to_caplist_dict(img_path_list=test_img)
 len(train_d), len(val_d), len(test_d)
 
-#%%
+# %%
 
 caps = dset.add_start_end_seq(train_d)
 vocab, word2idx, idx2word, max_len = dset.construct_vocab(caps=caps)
 vocab_size = len(vocab)
 vocab_size, max_len
 
-#%%
+# %%
 
 samples_per_epoch = sum(map(lambda cap: len(cap.split()) - 1, caps))
 samples_per_epoch
 
-#%%
+
+# %%
 def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wandb_log=False):
     running_acc = 0
     running_loss = 0.0
@@ -65,7 +66,8 @@ def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wan
 
     return model, running_loss
 
-#%%
+
+# %%
 
 from models.torch.resnet50_bidirlstm import Encoder
 
@@ -74,13 +76,13 @@ encoding_train = encoder.encode(dset.images, train_img, device=device)
 encoding_valid = encoder.encode(dset.images, val_img, device=device)
 encoding_test = encoder.encode(dset.images, test_img, device=device)
 
-#%%
+# %%
 
 BATCH_SIZE = 256
 MODEL_NAME = f'saved_models/IncepV3_bidirlstm_b{BATCH_SIZE}'
 steps_per_epoch = int(math.ceil(samples_per_epoch / BATCH_SIZE))
 
-#%%
+# %%
 
 from models.torch.resnet50_bidirlstm import Decoder
 
@@ -88,10 +90,10 @@ final_model = Decoder(embedding_size=300, vocab_size=vocab_size, max_len=max_len
 optimizer = torch.optim.Adam(final_model.parameters(), lr=1E-3)
 loss_fn = torch.nn.CrossEntropyLoss()
 
-#%%
-train_generator = dset.get_generator(batch_size=BATCH_SIZE, random_state=None,
+# %%
+train_generator = dset.get_generator(batch_size=BATCH_SIZE, random_state=None, device=device,
                                      encoding_train=encoding_train, imgpath_to_caplist_dict=train_d,
-                                     word2idx=word2idx, vocab_size=vocab_size, max_len=max_len)
+                                     word2idx=word2idx, max_len=max_len)
 train_loss_min = 100
 for epoch in range(5):
     final_model.train()
@@ -108,10 +110,11 @@ for epoch in range(5):
         train_loss_min = train_loss
         torch.save(state, f'{MODEL_NAME}''_best_train.pt')
 torch.save(final_model, f'{MODEL_NAME}''_ep{05}_weights.pt')
+final_model.eval()
 
 # %%
 
-# model = keras.models.load_model(f'{MODEL_NAME}''_best_train.h5')
+# model = torch.load(f'{MODEL_NAME}''_best_train.pt')
 model = final_model
 
 # %%
