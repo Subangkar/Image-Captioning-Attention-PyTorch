@@ -25,9 +25,9 @@ len(train_img), len(val_img), len(test_img)
 
 #%%
 
-train_d = dset.imgfilename_to_caplist_dict(img_path_list=train_img)
-val_d = dset.imgfilename_to_caplist_dict(img_path_list=val_img)
-test_d = dset.imgfilename_to_caplist_dict(img_path_list=test_img)
+train_d = dset.get_imgpath_to_caplist_dict(img_path_list=train_img)
+val_d = dset.get_imgpath_to_caplist_dict(img_path_list=val_img)
+test_d = dset.get_imgpath_to_caplist_dict(img_path_list=test_img)
 len(train_d), len(val_d), len(test_d)
 
 #%%
@@ -90,7 +90,7 @@ loss_fn = torch.nn.CrossEntropyLoss()
 
 #%%
 train_generator = dset.get_generator(batch_size=BATCH_SIZE, random_state=None,
-                                     encoding_train=encoding_train, imgfilename_to_caplist_dict=train_d,
+                                     encoding_train=encoding_train, imgpath_to_caplist_dict=train_d,
                                      word2idx=word2idx, vocab_size=vocab_size, max_len=max_len)
 train_loss_min = 100
 for epoch in range(5):

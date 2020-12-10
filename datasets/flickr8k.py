@@ -13,7 +13,7 @@ class Flickr8kDataset(Dataset):
     imgpath: full path to image file
     """
 
-    def __init__(self, dataset_base_path='data/flickr8k/', vocab=None, dist='val'):
+    def __init__(self, dataset_base_path='data/flickr8k/', vocab=None):
         self.token = dataset_base_path + 'Flickr8k_text/Flickr8k.token.txt'
         self.images = dataset_base_path + 'Flicker8k_Dataset/'
 
@@ -23,14 +23,12 @@ class Flickr8kDataset(Dataset):
             'test': dataset_base_path + 'Flickr8k_text/Flickr_8k.testImages.txt'
         }
 
-        self.dist = dist
-
         self.imgpath_list = glob.glob(self.images + '*.jpg')
         self.all_imgname_to_caplist = self.__all_imgname_to_caplist_dict()
         self.imgpath_to_caplist = self.get_imgpath_to_caplist_dict(self.get_imgpath_list())
 
-        if vocab is None:
-            self.vocab, self.word2idx, self.idx2word, self.max_len = self.construct_vocab(self.imgpath_to_caplist)
+        # if vocab is None:
+        #     self.vocab, self.word2idx, self.idx2word, self.max_len = self.construct_vocab(self.imgpath_to_caplist)
 
     def __all_imgname_to_caplist_dict(self):
         captions = open(self.token, 'r').read().strip().split('\n')
@@ -51,8 +49,8 @@ class Flickr8kDataset(Dataset):
                 d[i] = self.all_imgname_to_caplist[i[len(self.images):]]
         return d
 
-    def get_imgpath_list(self):
-        dist_images = set(open(self.dist_list[self.dist], 'r').read().strip().split('\n'))
+    def get_imgpath_list(self, dist='val'):
+        dist_images = set(open(self.dist_list[dist], 'r').read().strip().split('\n'))
         dist_imgpathlist = split_data(dist_images, img=self.imgpath_list, images=self.images)
         return dist_imgpathlist
 
