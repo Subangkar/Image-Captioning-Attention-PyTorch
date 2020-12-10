@@ -60,9 +60,10 @@ def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wan
         loss.backward()
         optimizer.step()
 
-        # running_acc += torch.mean(output == next_word)
+        running_acc += (torch.argmax(output, dim=1) == next_word).sum().item() / next_word.size(0)
         running_loss += loss.item()
-        t.set_postfix({'loss': running_loss / (batch_idx + 1)}, refresh=True)
+        t.set_postfix({'loss': running_loss / (batch_idx + 1),
+                       'acc': running_acc / (batch_idx + 1)}, refresh=True)
 
     return model, running_loss
 
@@ -96,7 +97,7 @@ train_generator = dset.get_generator(batch_size=BATCH_SIZE, random_state=None, d
                                      word2idx=word2idx, max_len=max_len)
 train_loss_min = 100
 for epoch in range(5):
-    print(f'Epoch {epoch:02d}/{5:d}')
+    print(f'Epoch {epoch + 1}/{5}', flush=True)
     final_model.train()
     final_model, train_loss = train_model(model=final_model, optimizer=optimizer, loss_fn=loss_fn,
                                           train_generator=train_generator, steps_per_epoch=steps_per_epoch)
@@ -106,11 +107,11 @@ for epoch in range(5):
         'optimizer': optimizer.state_dict()
     }
     if (epoch + 1) % 2 == 0:
-        torch.save(state, f'{MODEL_NAME}''_ep{epoch:02d}_weights.pt')
+        torch.save(state, f'{MODEL_NAME}_ep{epoch:02d}_weights.pt')
     if train_loss < train_loss_min:
         train_loss_min = train_loss
         torch.save(state, f'{MODEL_NAME}''_best_train.pt')
-torch.save(final_model, f'{MODEL_NAME}''_ep{05}_weights.pt')
+torch.save(final_model, f'{MODEL_NAME}_ep{5:02d}_weights.pt')
 final_model.eval()
 
 # %%
@@ -124,12 +125,12 @@ try_image = train_img[100]
 display(Image.open(try_image))
 print('Normal Max search:', greedy_predictions_gen(encoding_dict=encoding_train, model=model,
                                                    word2idx=word2idx, idx2word=idx2word,
-                                                   images=dset.images, max_len=max_len)(try_image))
+                                                   images=dset.images, max_len=max_len, device=device)(try_image))
 for k in [3, 5, 7]:
     print(f'Beam Search, k={k}:',
           beam_search_predictions_gen(beam_index=k, encoding_dict=encoding_train, model=model,
                                       word2idx=word2idx, idx2word=idx2word,
-                                      images=dset.images, max_len=max_len)(try_image))
+                                      images=dset.images, max_len=max_len, device=device)(try_image))
 
 # %%
 

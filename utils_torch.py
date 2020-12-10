@@ -32,17 +32,17 @@ def greedy_predictions_gen(encoding_dict, model, word2idx, idx2word, images, max
                            startseq="<start>", endseq="<end>", device=torch.device('cpu')):
     def greedy_search_predictions_util(image):
         start_word = [startseq]
-        while True:
-            par_caps = torch.LongTensor([word2idx[i] for i in start_word])
-            par_caps = padding_tensor([par_caps], maxlen=max_len).to(device=device)
-            e = torch.Tensor([encoding_dict[image[len(images):]]]).to(device=device)
-            preds = model(e, par_caps).cpu().numpy()
-            word_pred = idx2word[np.argmax(preds[0])]
-            start_word.append(word_pred)
+        with torch.no_grad():
+            while True:
+                par_caps = torch.LongTensor([word2idx[i] for i in start_word])
+                par_caps = padding_tensor([par_caps], maxlen=max_len).to(device=device)
+                e = encoding_dict[image[len(images):]].unsqueeze(0)
+                preds = model(e, par_caps).cpu().numpy()
+                word_pred = idx2word[np.argmax(preds[0])]  # [0] is for first elm of batch
+                start_word.append(word_pred)
 
-            if word_pred == endseq or len(start_word) > max_len:
-                break
-
+                if word_pred == endseq or len(start_word) > max_len:
+                    break
         return ' '.join(start_word[1:-1])
 
     return greedy_search_predictions_util
@@ -58,20 +58,21 @@ def beam_search_predictions_gen(beam_index, encoding_dict, model, word2idx, idx2
         while len(start_word[0][0]) < max_len:
             temp = []
             for s in start_word:
-                par_caps = torch.LongTensor([word2idx[i] for i in start_word])
-                par_caps = padding_tensor([par_caps], maxlen=max_len).to(device=device)
-                e = torch.Tensor([encoding_dict[image[len(images):]]]).to(device=device)
-                preds = model(e, par_caps).cpu().numpy()
+                with torch.no_grad():
+                    par_caps = torch.LongTensor(s[0])
+                    par_caps = padding_tensor([par_caps], maxlen=max_len).to(device=device)
+                    e = encoding_dict[image[len(images):]].unsqueeze(0)
+                    preds = model(e, par_caps).cpu().numpy()
 
-                word_preds = np.argsort(preds[0])[-beam_index:]
+                    word_preds = np.argsort(preds[0])[-beam_index:]
 
-                # Getting the top <beam_index>(n) predictions and creating a
-                # new list so as to put them via the model again
-                for w in word_preds:
-                    next_cap, prob = s[0][:], s[1]
-                    next_cap.append(w)
-                    prob += preds[0][w]
-                    temp.append([next_cap, prob])
+                    # Getting the top <beam_index>(n) predictions and creating a
+                    # new list so as to put them via the model again
+                    for w in word_preds:
+                        next_cap, prob = s[0][:], s[1]
+                        next_cap.append(w)
+                        prob += preds[0][w]
+                        temp.append([next_cap, prob])
 
             start_word = temp
             # Sorting according to the probabilities
