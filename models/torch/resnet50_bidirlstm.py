@@ -25,7 +25,7 @@ class Encoder(nn.Module):
         encoding_set = {}
         for image in tqdm(image_dist_set):
             # (h,w) -> (1,3,h,w)
-            temp_enc = self(preprocess(image, target_shape=(299, 299)))
+            temp_enc = self(preprocess(image, target_shape=(299, 299)).to(device))
             # (1,3,h,w) -> (2048,)
             encoding_set[image[len(image_dset_path):]] = torch.reshape(temp_enc, shape=(temp_enc.shape[1],))
         return encoding_set

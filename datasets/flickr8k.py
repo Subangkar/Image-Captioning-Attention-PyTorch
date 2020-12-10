@@ -122,7 +122,7 @@ class Flickr8kDataset(Dataset):
                     images.append(current_image)
 
                     if count >= batch_size:
-                        images = torch.Tensor(images).to(device=device)
+                        images = torch.stack(images)
                         partial_caps = padding_tensor(partial_caps, maxlen=max_len).to(device=device)
                         next_words = torch.LongTensor(next_words).to(device=device)
                         yield images, partial_caps, next_words
