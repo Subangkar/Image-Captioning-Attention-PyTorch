@@ -77,10 +77,6 @@ class Flickr8k:
         df = pd.read_csv(io.StringIO(img_id_cap_str), delimiter='\t')
 
         # ---------- Generator -------
-        partial_caps = []
-        next_words = []
-        images = []
-
         df = df.sample(frac=1, random_state=random_state)
         iter = df.iterrows()
         c = []
@@ -90,8 +86,11 @@ class Flickr8k:
             c.append(x[1][1])
             imgs.append(x[1][0])
 
-        count = 0
         while True:
+            count = 0
+            partial_caps = []
+            next_words = []
+            images = []
             for j, text in enumerate(c):
                 current_image = encoding_train[imgs[j]]
                 for i in range(len(text.split()) - 1):
@@ -119,3 +118,8 @@ class Flickr8k:
                         next_words = []
                         images = []
                         count = 0
+            if count > 0:
+                next_words = np.asarray(next_words)
+                images = np.asarray(images)
+                partial_caps = sequence.pad_sequences(partial_caps, maxlen=max_len, padding='post')
+                yield [images, partial_caps], next_words
