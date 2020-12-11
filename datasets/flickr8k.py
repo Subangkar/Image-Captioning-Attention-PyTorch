@@ -105,28 +105,33 @@ class Flickr8kDataset(Dataset):
             imgs.append(x[1][0])
 
         count = 0
-        while True:
-            for j, text in enumerate(c):
-                current_image = encoding_train[imgs[j]]
-                for i in range(len(text.split()) - 1):  # excluding last word
-                    count += 1
+        for j, text in enumerate(c):
+            current_image = encoding_train[imgs[j]]
+            for i in range(len(text.split()) - 1):  # excluding last word
+                count += 1
 
-                    partial = [word2idx[txt] for txt in text.split()[:i + 1]]
-                    partial_caps.append(torch.LongTensor(partial))
+                partial = [word2idx[txt] for txt in text.split()[:i + 1]]
+                partial_caps.append(torch.LongTensor(partial))
 
-                    # Initializing with zeros to create a one-hot encoding matrix
-                    # This is what we have to predict
-                    # Setting the next word to 1 in the one-hot encoded matrix
-                    next_words.append(word2idx[text.split()[i + 1]])
+                # Initializing with zeros to create a one-hot encoding matrix
+                # This is what we have to predict
+                # Setting the next word to 1 in the one-hot encoded matrix
+                next_words.append(word2idx[text.split()[i + 1]])
 
-                    images.append(current_image)
+                images.append(current_image)
 
-                    if count >= batch_size:
-                        images = torch.stack(images)
-                        partial_caps = padding_tensor(partial_caps, maxlen=max_len).to(device=device)
-                        next_words = torch.LongTensor(next_words).to(device=device)
-                        yield images, partial_caps, next_words
-                        partial_caps = []
-                        next_words = []
-                        images = []
-                        count = 0
+                if count >= batch_size:
+                    images = torch.stack(images)
+                    partial_caps = padding_tensor(partial_caps, maxlen=max_len).to(device=device)
+                    next_words = torch.LongTensor(next_words).to(device=device)
+                    yield images, partial_caps, next_words
+                    partial_caps = []
+                    next_words = []
+                    images = []
+                    count = 0
+
+        if count > 0:
+            images = torch.stack(images)
+            partial_caps = padding_tensor(partial_caps, maxlen=max_len).to(device=device)
+            next_words = torch.LongTensor(next_words).to(device=device)
+            yield images, partial_caps, next_words

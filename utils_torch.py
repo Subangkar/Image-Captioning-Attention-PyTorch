@@ -13,18 +13,11 @@ def preprocess_input(x):
 
 
 # returns (3, h, w)
-def preprocess(image_path, target_shape=(299, 299)):
-    trans = transforms.Compose([
-        transforms.Resize(target_shape),
-        transforms.ToTensor(),
-        # transforms.Normalize(mean=0, std=1),
-    ])
+def preprocess(image_path, trans):
     img = Image.open(image_path).convert('RGB')
-    # img = image.load_img(image_path, target_size=target_shape)
     x = trans(img)
     x = x.unsqueeze(0)
-
-    x = preprocess_input(x)
+    # x = preprocess_input(x)
     return x
 
 
