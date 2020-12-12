@@ -61,12 +61,27 @@ encoding_test = encoder.encode(dset.images, test_img)
 # %%
 
 MODEL = "densenet201_bidirlstm"
-EMBEDDING = "GLV300"
-EMBEDDING_DIM = 300
+EMBEDDING_DIM = 200
+EMBEDDING = f"GLV{EMBEDDING_DIM}"
 BATCH_SIZE = 256
 LR = 1e-3
 MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
 NUM_EPOCHS = 50
+
+run = wandb.init(project='image-captioning',
+                 entity='datalab-buet',
+                 name=f"{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}-{1}",
+                 tensorboard=True, sync_tensorboard=True,
+                 config={"learning_rate": LR,
+                         "epochs": NUM_EPOCHS,
+                         "batch_size": BATCH_SIZE,
+                         "model": MODEL,
+                         "embedding": EMBEDDING,
+                         "embedding_dim": EMBEDDING_DIM,
+                         },
+                 reinit=True)
+config = wandb.config
+
 steps_per_epoch = int(math.ceil(samples_per_epoch / BATCH_SIZE))
 steps_per_epoch_val = int(math.ceil(samples_per_epoch_val / BATCH_SIZE))
 steps_per_epoch_test = int(math.ceil(samples_per_epoch_test / BATCH_SIZE))
@@ -111,32 +126,17 @@ final_model.fit(
         keras.callbacks.ModelCheckpoint(f'{MODEL_NAME}''_best_train.h5', monitor='loss',
                                         save_best_only=True, mode='min'),
         keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.5, patience=5, min_lr=1e-5),
-        wandb.keras.WandbCallback(),
+        wandb.keras.WandbCallback(monitor='loss', mode='min', log_weights=True, log_gradients=True,
+                                  ),
     ],
     validation_data=dset.get_generator(batch_size=BATCH_SIZE, random_state=0,
                                        encoding_train=encoding_valid, imgfilename_to_caplist_dict=val_d,
                                        word2idx=word2idx, vocab_size=vocab_size, max_len=max_len),
-    validation_steps=steps_per_epoch_val
+    validation_steps=steps_per_epoch_val,
 )
 final_model.save(f"{MODEL_NAME}_ep{NUM_EPOCHS}.h5")
-
-# %%
-
-final_model.fit(
-    x=dset.get_generator(batch_size=BATCH_SIZE, random_state=None,
-                         encoding_train=encoding_train, imgfilename_to_caplist_dict=train_d,
-                         word2idx=word2idx, vocab_size=vocab_size, max_len=max_len),
-    steps_per_epoch=steps_per_epoch,
-    epochs=100, initial_epoch=50,
-    callbacks=[
-        keras.callbacks.ModelCheckpoint(
-            f'{MODEL_NAME}''_ep{epoch:02d}_weights.h5',
-            save_weights_only=True, period=10),
-        keras.callbacks.EarlyStopping(patience=5, monitor='loss'),
-        keras.callbacks.ModelCheckpoint(f'{MODEL_NAME}''_best_train.h5', monitor='loss',
-                                        save_best_only=True, mode='min'),
-    ])
-final_model.save(f"{MODEL_NAME}_ep{100}.h5")
+wandb.save(f"{MODEL_NAME}_ep{NUM_EPOCHS}.h5")
+wandb.save(f'{MODEL_NAME}''_best_train.h5')
 
 # %%
 
