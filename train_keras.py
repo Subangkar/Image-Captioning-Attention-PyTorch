@@ -1,4 +1,7 @@
 # %%
+import wandb
+
+# %%
 import math
 
 from IPython.core.display import display
@@ -42,8 +45,13 @@ samples_per_epoch_test = sum(map(lambda cap: len(cap.split()) - 1, dset.add_star
 samples_per_epoch, samples_per_epoch_val, samples_per_epoch_test
 
 # %%
+from glove import embedding_matrix_creator
 
-from models.keras.incepv3_bidirlstm import Encoder
+embedding_matrix = embedding_matrix_creator(embedding_dim=300, word2idx=word2idx)
+embedding_matrix.shape
+# %%
+
+from models.keras.densenet201_glv_bidirlstm import Encoder
 
 encoder = Encoder()
 encoding_train = encoder.encode(dset.images, train_img)
@@ -52,22 +60,40 @@ encoding_test = encoder.encode(dset.images, test_img)
 
 # %%
 
-from models.keras.incepv3_bidirlstm import Decoder
-
-final_model = Decoder(embedding_size=300, vocab_size=vocab_size, max_len=max_len).get_model()
-opt = keras.optimizers.Adam(learning_rate=1e-3)
-final_model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
-final_model.summary()
-
-# %%
-
+MODEL = "densenet201_bidirlstm"
+EMBEDDING = "GLV300"
+EMBEDDING_DIM = 300
 BATCH_SIZE = 256
-MODEL_NAME = f'saved_models/IncepV3_bidirlstm_b{BATCH_SIZE}'
+LR = 1e-3
+MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
 NUM_EPOCHS = 50
 steps_per_epoch = int(math.ceil(samples_per_epoch / BATCH_SIZE))
 steps_per_epoch_val = int(math.ceil(samples_per_epoch_val / BATCH_SIZE))
 steps_per_epoch_test = int(math.ceil(samples_per_epoch_test / BATCH_SIZE))
 steps_per_epoch, steps_per_epoch_val, steps_per_epoch_test
+
+# %%
+run = wandb.init(project='image-captioning',
+                 entity='datalab-buet',
+                 name=f"{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}-{1}",
+                 tensorboard=True, sync_tensorboard=True,
+                 config={"learning_rate": LR,
+                         "epochs": NUM_EPOCHS,
+                         "batch_size": BATCH_SIZE,
+                         "model": MODEL,
+                         "embedding": EMBEDDING,
+                         "embedding_dim": EMBEDDING_DIM,
+                         })
+config = wandb.config
+# %%
+
+from models.keras.densenet201_glv_bidirlstm import Decoder
+
+final_model = Decoder(embedding_size=EMBEDDING_DIM, vocab_size=vocab_size, max_len=max_len,
+                      embedding_matrix=embedding_matrix).get_model()
+opt = keras.optimizers.Adam(learning_rate=LR)
+final_model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+final_model.summary()
 
 # %%
 
@@ -85,6 +111,7 @@ final_model.fit(
         keras.callbacks.ModelCheckpoint(f'{MODEL_NAME}''_best_train.h5', monitor='loss',
                                         save_best_only=True, mode='min'),
         keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.5, patience=5, min_lr=1e-5),
+        wandb.keras.WandbCallback(),
     ],
     validation_data=dset.get_generator(batch_size=BATCH_SIZE, random_state=0,
                                        encoding_train=encoding_valid, imgfilename_to_caplist_dict=val_d,

@@ -17,7 +17,7 @@ def glove_dictionary(GLOVE_DIR, dim=200):
 
 def embedding_matrix_creator(embedding_dim, word2idx, GLOVE_DIR='data/glove.6B/'):
     embeddings_index = glove_dictionary(GLOVE_DIR=GLOVE_DIR, dim=embedding_dim)
-    embedding_matrix = np.zeros((len(word2idx) + 1, embedding_dim))
+    embedding_matrix = np.zeros((len(word2idx), embedding_dim))
     for word, i in word2idx.items():
         embedding_vector = embeddings_index.get(word.lower())
         if embedding_vector is not None:
