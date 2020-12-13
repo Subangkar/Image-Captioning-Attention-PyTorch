@@ -124,7 +124,7 @@ train_set.transformations = transforms.Compose([
     transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
                          (0.229, 0.224, 0.225))
 ])
-train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None)
+train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, sampler=None)
 train_loss_min = 100
 for epoch in range(NUM_EPOCHS):
     train_loss = train_model_new(desc=f'Epoch {epoch + 1}/{NUM_EPOCHS}', encoder=encoder, decoder=decoder,

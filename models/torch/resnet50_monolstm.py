@@ -37,30 +37,28 @@ class Decoder(nn.Module):
         features = [b, 300]
         captions = [b, max_len]
         """
-        # [b, max_len] -> [b, 39]
+        # [b, max_len] -> [b, max_len-1]
         captions = captions[:, :-1]
-        # print(captions.shape)
-        # [b, 39, embed_dim]
+        # [b, max_len-1, embed_dim]
         embeddings = self.embed(captions)
-        # print(embeddings.shape)
         # [b, max_len, embed_dim]
         inputs = torch.cat((features.unsqueeze(1), embeddings), 1)
-        # print(inputs.shape)
-        # [b, max_len, 256]
+        # [b, max_len, hidden_size]
         hiddens, _ = self.lstm(inputs)
-        # print(hiddens.shape)
-        # [b, max_len, 8254]
+        # [b, max_len, vocab_size]
         outputs = self.linear(hiddens)
         return outputs
 
-    def sample(self, inputs, states=None, max_len=40):
+    def sample(self, features, states=None, max_len=40):
         """Accept a pre-processed image tensor (inputs) and return predicted 
         sentence (list of tensor ids of length max_len). This is the greedy
         search approach.
         limited to single element batch as input
+        features = [1, embed_dim]
         inputs = [1, 1, embed_dim]
         """
         sampled_ids = []
+        inputs = features.unsqueeze(1)
         for i in range(max_len):
             # [1, 1, 256]
             hiddens, states = self.lstm(inputs, states)
