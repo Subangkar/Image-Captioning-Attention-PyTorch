@@ -1,12 +1,15 @@
 import math
+import os
 
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
 import glob
 import pandas as pd
+import numpy as np
 import io
 from torchvision import transforms
+import nltk
 
 from utils_torch import split_data
 from utils_torch import padding_tensor
@@ -18,9 +21,14 @@ class Flickr8kDataset(Dataset):
     imgpath: full path to image file
     """
 
-    def __init__(self, dataset_base_path='data/flickr8k/', vocab=None):
+    def __init__(self, dataset_base_path='data/flickr8k/',
+                 vocab_set=None, dist='val',
+                 startseq="<start>", endseq="<end>", unkseq="<unk>",
+                 transformations=None,
+                 return_raw=False,
+                 device=torch.device('cpu')):
         self.token = dataset_base_path + 'Flickr8k_text/Flickr8k.token.txt'
-        self.images = dataset_base_path + 'Flicker8k_Dataset/'
+        self.images_path = dataset_base_path + 'Flicker8k_Dataset/'
 
         self.dist_list = {
             'train': dataset_base_path + 'Flickr8k_text/Flickr_8k.trainImages.txt',
@@ -28,12 +36,28 @@ class Flickr8kDataset(Dataset):
             'test': dataset_base_path + 'Flickr8k_text/Flickr_8k.testImages.txt'
         }
 
-        self.imgpath_list = glob.glob(self.images + '*.jpg')
-        self.all_imgname_to_caplist = self.__all_imgname_to_caplist_dict()
-        self.imgpath_to_caplist = self.get_imgpath_to_caplist_dict(self.get_imgpath_list())
+        self.device = torch.device(device)
+        self.torch = torch.cuda if (self.device.type == 'cuda') else torch
 
-        # if vocab is None:
-        #     self.vocab, self.word2idx, self.idx2word, self.max_len = self.construct_vocab(self.imgpath_to_caplist)
+        self.return_raw = return_raw
+
+        self.imgpath_list = glob.glob(self.images_path + '*.jpg')
+        self.all_imgname_to_caplist = self.__all_imgname_to_caplist_dict()
+        self.imgpath_to_caplist = self.__get_imgpath_to_caplist_dict(self.__get_imgpath_list(dist=dist))
+
+        self.transformations = transformations if transformations is not None else transforms.Compose([
+            transforms.ToTensor()
+        ])
+
+        self.startseq = startseq.strip()
+        self.endseq = endseq.strip()
+        self.unkseq = unkseq.strip()
+
+        if vocab_set is None:
+            self.vocab, self.word2idx, self.idx2word, self.max_len = self.__construct_vocab()
+        else:
+            self.vocab, self.word2idx, self.idx2word, self.max_len = vocab_set
+        self.db = self.get_db()
 
     def __all_imgname_to_caplist_dict(self):
         captions = open(self.token, 'r').read().strip().split('\n')
@@ -47,76 +71,63 @@ class Flickr8kDataset(Dataset):
                 imgname_to_caplist[row[0]] = [row[1]]
         return imgname_to_caplist
 
-    def get_imgpath_to_caplist_dict(self, img_path_list):
+    def __get_imgpath_to_caplist_dict(self, img_path_list):
         d = {}
         for i in img_path_list:
-            if i[len(self.images):] in self.all_imgname_to_caplist:
-                d[i] = self.all_imgname_to_caplist[i[len(self.images):]]
+            if i[len(self.images_path):] in self.all_imgname_to_caplist:
+                d[i] = self.all_imgname_to_caplist[i[len(self.images_path):]]
         return d
 
-    def get_imgpath_list(self, dist='val'):
+    def __get_imgpath_list(self, dist='val'):
         dist_images = set(open(self.dist_list[dist], 'r').read().strip().split('\n'))
-        dist_imgpathlist = split_data(dist_images, img=self.imgpath_list, images=self.images)
+        dist_imgpathlist = split_data(dist_images, img=self.imgpath_list, images=self.images_path)
         return dist_imgpathlist
 
-    def add_start_end_seq(self, imgpath_to_caplist_dict, startseq="<start> ", endseq="<end>"):
-        caps = []
-        for key, val in imgpath_to_caplist_dict.items():
-            for i in val:
-                caps.append(f'{startseq} {i} {endseq}')
-        return caps
+    def __construct_vocab(self):
+        words = [self.startseq, self.endseq, self.unkseq]
+        max_len = 0
+        for key, caplist in self.imgpath_to_caplist.items():
+            for cap in caplist:
+                cap_words = nltk.word_tokenize(cap)
+                words.extend(cap_words)
+                max_len = max(max_len, len(cap_words) + 2)
+        vocab = sorted(list(set(words)))
 
-    def construct_vocab(self, caps):
-        words = [i.split() for i in caps]
-        unique = []
-        for i in words:
-            unique.extend(i)
-        vocab = sorted(list(set(unique)))
+        word2idx = {word: index for index, word in enumerate(vocab)}
+        idx2word = {index: word for index, word in enumerate(vocab)}
 
-        word2idx = {val: index for index, val in enumerate(vocab)}
-        idx2word = {index: val for index, val in enumerate(vocab)}
+        return vocab, word2idx, idx2word, max_len
 
-        return vocab, word2idx, idx2word, max(map(lambda w: len(w), words))
+    def get_vocab(self):
+        return self.vocab, self.word2idx, self.idx2word, self.max_len
 
-    # def __getitem__(self, index: int):
-
-    def __len__(self):
-        return len(self.imgpath_to_caplist)
-
-    def get_generator(self, batch_size, encoding_dict, imgpath_to_caplist_dict, word2idx, max_len,
-                      random_state=17, device=torch.device('cpu')):
-        transform_train = transforms.Compose([
-            transforms.Resize(256),  # smaller edge of image resized to 256
-            transforms.RandomCrop(224),  # get 224x224 crop from random location
-            # transforms.RandomHorizontalFlip(),               # horizontally flip image with probability=0.5
-            transforms.ToTensor(),  # convert the PIL Image to a tensor
-            transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
-                                 (0.229, 0.224, 0.225))
-        ])
-
+    def get_db(self):
         # ----- Forming a df to sample from ------
-        l = ["image_id\tcaptions\n"]
-        encoding_dict = {}
-        for key, val in imgpath_to_caplist_dict.items():
-            encoding_dict[key[len(self.images):]] = transform_train(Image.open(key))
-            for i in val:
-                l.append(''.join([key[len(self.images):], "\t", "<start> ", i, " <end>", "\n"]))
+        l = ["image_id\tcaption\tcaption_length\n"]
+        # pil_d = {}
+        for imgpath, caplist in self.imgpath_to_caplist.items():
+            # pil_d[imgpath[len(self.images_path):]] = Image.open(imgpath).convert('RGB')
+            for cap in caplist:
+                l.append(
+                    f"{imgpath[len(self.images_path):]}\t"
+                    f"{cap}\t"  # {self.startseq} {cap} {self.endseq}
+                    f"{len(nltk.word_tokenize(cap)) + 2}\n")
         img_id_cap_str = ''.join(l)
 
         df = pd.read_csv(io.StringIO(img_id_cap_str), delimiter='\t')
+        return df.to_numpy()
 
-        # ---------- Generator -------
-        df = df.sample(frac=1, random_state=random_state)
-        iter = df.iterrows()
-        c = []  # list of captions
-        imgs = []  # list of imgname
-        for i in range(df.shape[0]):
-            x = next(iter)
-            c.append(x[1][1])
-            imgs.append(x[1][0])
-        for b in range(int(math.ceil(len(c) / batch_size))):
-            st = b * batch_size
-            en = min(st + batch_size, len(c))
-            img_tens = [encoding_dict[im] for im in imgs[st:en]]
-            cap_tens = [torch.LongTensor([word2idx[word] for word in caption.split()]) for caption in c[st:en]]
-            yield torch.stack(img_tens).to(device=device), padding_tensor(cap_tens, maxlen=max_len).to(device=device)
+    def __getitem__(self, index: int):
+        imgname = self.db[index][0]
+        caption = self.db[index][1]
+        if self.return_raw:
+            return os.path.join(self.images_path, imgname), caption
+        cap_toks = [self.startseq] + nltk.word_tokenize(self.db[index][1]) + [self.endseq]
+        img_tens = np.array(Image.open(os.path.join(self.images_path, imgname)).convert('RGB'))  # self.pil_d[imgname]
+        img_tens = self.transformations(img_tens).to(self.device)
+        cap_tens = self.torch.LongTensor(self.max_len).fill_(0)
+        cap_tens[:len(cap_toks)] = self.torch.LongTensor([self.word2idx[word] for word in cap_toks])
+        return img_tens, cap_tens
+
+    def __len__(self):
+        return len(self.db)

@@ -1,0 +1,10 @@
+keras
+torch
+torchvision
+tqdm
+pillow
+tensorflow
+ipython
+numpy
+pandas
+nltk

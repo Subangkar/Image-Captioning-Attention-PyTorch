@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torchvision import transforms
 from PIL import Image
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from nltk.translate.bleu_score import sentence_bleu
 
 

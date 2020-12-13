@@ -1,7 +1,7 @@
 import numpy as np
 from keras.preprocessing import sequence
 from keras.preprocessing import image
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from nltk.translate.bleu_score import sentence_bleu
 
 
