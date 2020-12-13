@@ -56,13 +56,13 @@ def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wan
     return model, running_loss
 
 
-def train_model_new(train_loader, encoder, decoder, loss_fn, optimizer, vocab_size):
+def train_model_new(train_loader, encoder, decoder, loss_fn, optimizer, vocab_size, desc=''):
     running_acc = 0.0
     running_loss = 0.0
     encoder.train()
     decoder.train()
-    t = tqdm(iter(train_loader))
-    for batch_idx, batch in enumerate(t):  # enumerate(iter(steps_per_epoch)):
+    t = tqdm(iter(train_loader), desc=f'{desc}:')
+    for batch_idx, batch in enumerate(t):
         images, captions = batch
 
         optimizer.zero_grad()
@@ -127,8 +127,8 @@ train_set.transformations = transforms.Compose([
 train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None)
 train_loss_min = 100
 for epoch in range(NUM_EPOCHS):
-    print(f'Epoch {epoch + 1}/{NUM_EPOCHS}', flush=True)
-    train_loss = train_model_new(encoder=encoder, decoder=decoder, optimizer=optimizer, loss_fn=loss_fn,
+    train_loss = train_model_new(desc=f'Epoch {epoch + 1}/{NUM_EPOCHS}', encoder=encoder, decoder=decoder,
+                                 optimizer=optimizer, loss_fn=loss_fn,
                                  train_loader=train_loader, vocab_size=vocab_size)
 #     state = {
 #         'epoch': epoch + 1,
@@ -142,6 +142,8 @@ for epoch in range(NUM_EPOCHS):
 #         torch.save(state, f'{MODEL_NAME}''_best_train.pt')
 # torch.save(final_model, f'{MODEL_NAME}_ep{5:02d}_weights.pt')
 # final_model.eval()
+encoder.eval()
+decoder.eval()
 
 # %%
 

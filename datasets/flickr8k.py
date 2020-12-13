@@ -111,7 +111,7 @@ class Flickr8kDataset(Dataset):
                 l.append(
                     f"{imgpath[len(self.images_path):]}\t"
                     f"{cap}\t"  # {self.startseq} {cap} {self.endseq}
-                    f"{len(nltk.word_tokenize(cap)) + 2}\n")
+                    f"{len(nltk.word_tokenize(cap))}\n")
         img_id_cap_str = ''.join(l)
 
         df = pd.read_csv(io.StringIO(img_id_cap_str), delimiter='\t')
@@ -128,7 +128,7 @@ class Flickr8kDataset(Dataset):
         img_tens = self.transformations(img_tens).to(self.device)
         cap_tens = self.torch.LongTensor(self.max_len).fill_(0)
         cap_tens[:len(cap_toks)] = self.torch.LongTensor([self.word2idx[word] for word in cap_toks])
-        return img_tens, cap_tens, self.torch.LongTensor(capt_ln)
+        return img_tens, cap_tens, self.torch.LongTensor([len(cap_toks)])
 
     def __len__(self):
         return len(self.db)

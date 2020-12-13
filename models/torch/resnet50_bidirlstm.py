@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 import torchvision
 from torchvision import transforms
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from models.torch import layers
 from utils_torch import preprocess
