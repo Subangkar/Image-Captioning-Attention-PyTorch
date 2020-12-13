@@ -120,14 +120,15 @@ class Flickr8kDataset(Dataset):
     def __getitem__(self, index: int):
         imgname = self.db[index][0]
         caption = self.db[index][1]
+        capt_ln = self.db[index][2]
         if self.return_raw:
-            return os.path.join(self.images_path, imgname), caption
+            return os.path.join(self.images_path, imgname), caption, capt_ln
         cap_toks = [self.startseq] + nltk.word_tokenize(self.db[index][1]) + [self.endseq]
-        img_tens = np.array(Image.open(os.path.join(self.images_path, imgname)).convert('RGB'))  # self.pil_d[imgname]
+        img_tens = Image.open(os.path.join(self.images_path, imgname)).convert('RGB')  # self.pil_d[imgname]
         img_tens = self.transformations(img_tens).to(self.device)
         cap_tens = self.torch.LongTensor(self.max_len).fill_(0)
         cap_tens[:len(cap_toks)] = self.torch.LongTensor([self.word2idx[word] for word in cap_toks])
-        return img_tens, cap_tens
+        return img_tens, cap_tens, self.torch.LongTensor(capt_ln)
 
     def __len__(self):
         return len(self.db)
