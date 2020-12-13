@@ -93,7 +93,7 @@ loss_fn = torch.nn.CrossEntropyLoss()
 
 # %%
 train_generator = dset.get_generator(batch_size=BATCH_SIZE, random_state=None, device=device,
-                                     encoding_train=encoding_train, imgpath_to_caplist_dict=train_d,
+                                     encoding_dict=encoding_train, imgpath_to_caplist_dict=train_d,
                                      word2idx=word2idx, max_len=max_len)
 train_loss_min = 100
 for epoch in range(5):

@@ -1,8 +1,12 @@
+import math
+
 import torch
+from PIL import Image
 from torch.utils.data import Dataset
 import glob
 import pandas as pd
 import io
+from torchvision import transforms
 
 from utils_torch import split_data
 from utils_torch import padding_tensor
@@ -79,11 +83,22 @@ class Flickr8kDataset(Dataset):
     def __len__(self):
         return len(self.imgpath_to_caplist)
 
-    def get_generator(self, batch_size, encoding_train, imgpath_to_caplist_dict, word2idx, max_len,
+    def get_generator(self, batch_size, encoding_dict, imgpath_to_caplist_dict, word2idx, max_len,
                       random_state=17, device=torch.device('cpu')):
+        transform_train = transforms.Compose([
+            transforms.Resize(256),  # smaller edge of image resized to 256
+            transforms.RandomCrop(224),  # get 224x224 crop from random location
+            # transforms.RandomHorizontalFlip(),               # horizontally flip image with probability=0.5
+            transforms.ToTensor(),  # convert the PIL Image to a tensor
+            transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
+                                 (0.229, 0.224, 0.225))
+        ])
+
         # ----- Forming a df to sample from ------
         l = ["image_id\tcaptions\n"]
+        encoding_dict = {}
         for key, val in imgpath_to_caplist_dict.items():
+            encoding_dict[key[len(self.images):]] = transform_train(Image.open(key))
             for i in val:
                 l.append(''.join([key[len(self.images):], "\t", "<start> ", i, " <end>", "\n"]))
         img_id_cap_str = ''.join(l)
@@ -99,34 +114,9 @@ class Flickr8kDataset(Dataset):
             x = next(iter)
             c.append(x[1][1])
             imgs.append(x[1][0])
-
-        count = 0
-        partial_caps = []
-        next_words = []
-        images = []
-        for j, text in enumerate(c):
-            current_image = encoding_train[imgs[j]]
-            for i in range(len(text.split()) - 1):  # excluding last word
-                count += 1
-
-                partial = [word2idx[txt] for txt in text.split()[:i + 1]]
-                partial_caps.append(torch.LongTensor(partial))
-
-                # Initializing with zeros to create a one-hot encoding matrix
-                # This is what we have to predict
-                # Setting the next word to 1 in the one-hot encoded matrix
-                next_words.append(word2idx[text.split()[i + 1]])
-
-                images.append(current_image)
-
-                if count >= batch_size:
-                    images = torch.stack(images)
-                    partial_caps = padding_tensor(partial_caps, maxlen=max_len).to(device=device)
-                    next_words = torch.LongTensor(next_words).to(device=device)
-                    yield images, partial_caps, next_words
-
-        if count > 0:
-            images = torch.stack(images)
-            partial_caps = padding_tensor(partial_caps, maxlen=max_len).to(device=device)
-            next_words = torch.LongTensor(next_words).to(device=device)
-            yield images, partial_caps, next_words
+        for b in range(int(math.ceil(len(c) / batch_size))):
+            st = b * batch_size
+            en = min(st + batch_size, len(c))
+            img_tens = [encoding_dict[im] for im in imgs[st:en]]
+            cap_tens = [torch.LongTensor([word2idx[word] for word in caption.split()]) for caption in c[st:en]]
+            yield torch.stack(img_tens).to(device=device), padding_tensor(cap_tens, maxlen=max_len).to(device=device)
