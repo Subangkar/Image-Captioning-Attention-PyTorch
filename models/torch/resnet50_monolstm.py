@@ -105,3 +105,15 @@ class Decoder(nn.Module):
             ordered = sorted(all_candidates, key=lambda x: x[1], reverse=True)
             idx_sequences = ordered[:beam_width]
         return [idx_seq[0] for idx_seq in idx_sequences]
+
+
+class Captioner(nn.Module):
+    def __init__(self, embed_size, hidden_size, vocab_size, num_layers=1):
+        super().__init__()
+        self.encoder = Encoder(embed_size)
+        self.decoder = Decoder(embed_size, hidden_size, vocab_size, num_layers)
+
+    def forward(self, images, captions):
+        features = self.encoder(images)
+        outputs = self.decoder(features, captions)
+        return outputs
