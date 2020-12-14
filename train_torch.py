@@ -3,6 +3,7 @@ from IPython.core.display import display
 import torch
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm, trange
+from matplotlib import pyplot as plt
 
 from utils_torch import *
 from datasets.flickr8k import Flickr8kDataset
@@ -16,7 +17,8 @@ DATASET_BASE_PATH = 'data/flickr8k/'
 
 # %%
 
-train_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='train', device=device)
+train_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='train', device=device,
+                            load_img_to_memory=False)
 vocab, word2idx, idx2word, max_len = vocab_set = train_set.get_vocab()
 val_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='val', vocab_set=vocab_set, device=device)
 test_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='test', vocab_set=vocab_set, device=device)
@@ -33,37 +35,15 @@ samples_per_epoch
 
 
 # %%
-def train_model(model, train_generator, steps_per_epoch, optimizer, loss_fn, wandb_log=False):
-    running_acc = 0
-    running_loss = 0.0
 
-    t = trange(steps_per_epoch, leave=True)
-    for batch_idx in t:  # enumerate(iter(steps_per_epoch)):
-        batch = next(train_generator)
-        (enc, cap_in, next_word) = batch
-
-        optimizer.zero_grad()
-        output = model(enc, cap_in)
-        loss = loss_fn(output, next_word)
-        loss.backward()
-        optimizer.step()
-
-        running_acc += (torch.argmax(output, dim=1) == next_word).sum().item() / next_word.size(0)
-        running_loss += loss.item()
-        t.set_postfix({'loss': running_loss / (batch_idx + 1),
-                       'acc': running_acc / (batch_idx + 1)}, refresh=True)
-
-    return model, running_loss
-
-
-def train_model_new(train_loader, encoder, decoder, loss_fn, optimizer, vocab_size, desc=''):
+def train_model_new(train_loader, encoder, decoder, loss_fn, optimizer, vocab_size, acc_fn, desc=''):
     running_acc = 0.0
     running_loss = 0.0
     encoder.train()
     decoder.train()
-    t = tqdm(iter(train_loader), desc=f'{desc}:')
+    t = tqdm(iter(train_loader), desc=f'{desc}')
     for batch_idx, batch in enumerate(t):
-        images, captions = batch
+        images, captions, lengths = batch
 
         optimizer.zero_grad()
         features = encoder(images)
@@ -73,8 +53,7 @@ def train_model_new(train_loader, encoder, decoder, loss_fn, optimizer, vocab_si
         loss.backward()
         optimizer.step()
 
-        running_acc += (torch.argmax(outputs.view(-1, vocab_size), dim=1) == captions.view(
-            -1)).sum().item() / captions.view(-1).size(0)
+        running_acc += acc_fn(torch.argmax(outputs.view(-1, vocab_size), dim=1), captions.view(-1))
         running_loss += loss.item()
         t.set_postfix({'loss': running_loss / (batch_idx + 1),
                        'acc': running_acc / (batch_idx + 1),
@@ -97,7 +76,7 @@ NUM_EPOCHS = 2
 
 from models.torch.resnet50_monolstm import Encoder
 
-encoder = Encoder(embed_size=300).to(device=device)
+# encoder = Encoder(embed_size=300).to(device=device)
 
 # %%
 
@@ -106,8 +85,8 @@ from models.torch.resnet50_monolstm import Decoder
 encoder = Encoder(embed_size=EMBEDDING_DIM).to(device)
 decoder = Decoder(EMBEDDING_DIM, 256, vocab_size, num_layers=2).to(device)
 
-# Define the loss function
-loss_fn = torch.nn.CrossEntropyLoss().cuda() if torch.cuda.is_available() else torch.nn.CrossEntropyLoss()
+loss_fn = torch.nn.CrossEntropyLoss(ignore_index=train_set.pad_value).to(device)
+acc_fn = accuracy_fn(ignore_value=train_set.pad_value)
 
 # Specify the learnable parameters of the model
 params = list(decoder.parameters()) + list(encoder.embed.parameters()) + list(encoder.bn.parameters())
@@ -119,7 +98,7 @@ optimizer = torch.optim.Adam(params=params, lr=LR)
 train_set.transformations = transforms.Compose([
     transforms.Resize(256),  # smaller edge of image resized to 256
     transforms.RandomCrop(224),  # get 224x224 crop from random location
-    # transforms.RandomHorizontalFlip(),               # horizontally flip image with probability=0.5
+    transforms.RandomHorizontalFlip(p=0.5),
     transforms.ToTensor(),  # convert the PIL Image to a tensor
     transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
                          (0.229, 0.224, 0.225))
@@ -128,7 +107,7 @@ train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, sample
 train_loss_min = 100
 for epoch in range(NUM_EPOCHS):
     train_loss = train_model_new(desc=f'Epoch {epoch + 1}/{NUM_EPOCHS}', encoder=encoder, decoder=decoder,
-                                 optimizer=optimizer, loss_fn=loss_fn,
+                                 optimizer=optimizer, loss_fn=loss_fn, acc_fn=acc_fn,
                                  train_loader=train_loader, vocab_size=vocab_size)
 #     state = {
 #         'epoch': epoch + 1,
@@ -146,62 +125,27 @@ encoder.eval()
 decoder.eval()
 
 # %%
+t_i = 1003
+feat = encoder(train_set[t_i][0].unsqueeze(0))
+print(''.join([idx2word[idx.item()] + ' ' for idx in train_set[t_i][1]]))
+print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
 
-# model = torch.load(f'{MODEL_NAME}''_best_train.pt')
-# model = final_model
-
-# %%
-
-try_image = train_set.imgpath_list[100]
-display(Image.open(try_image))
-print('Normal Max search:', greedy_predictions_gen(encoding_dict=encoding_train, model=model,
-                                                   word2idx=word2idx, idx2word=idx2word,
-                                                   images=train_set.images_path, max_len=max_len, device=device)(
-    try_image))
-for k in [3, 5, 7]:
-    print(f'Beam Search, k={k}:',
-          beam_search_predictions_gen(beam_index=k, encoding_dict=encoding_train, model=model,
-                                      word2idx=word2idx, idx2word=idx2word,
-                                      images=train_set.images_path, max_len=max_len, device=device)(try_image))
+plt.imshow(train_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
+t_i = 2020
+feat = encoder(val_set[t_i][0].unsqueeze(0))
+print(''.join([idx2word[idx.item()] + ' ' for idx in val_set[t_i][1]]))
+print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
 
-try_image = val_set.imgpath_list[4]
-display(Image.open(try_image))
-print('Normal Max search:', greedy_predictions_gen(encoding_dict=encoding_valid, model=model,
-                                                   word2idx=word2idx, idx2word=idx2word,
-                                                   images=train_set.images_path, max_len=max_len)(try_image))
-for k in [3, 5, 7]:
-    print(f'Beam Search, k={k}:',
-          beam_search_predictions_gen(beam_index=k, encoding_dict=encoding_valid, model=model,
-                                      word2idx=word2idx, idx2word=idx2word,
-                                      images=train_set.images_path, max_len=max_len)(try_image))
+plt.imshow(val_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
+t_i = 2020
+feat = encoder(test_set[t_i][0].unsqueeze(0))
+print(''.join([idx2word[idx.item()] + ' ' for idx in test_set[t_i][1]]))
+print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
 
-try_image = test_set.imgpath_list[4]
-display(Image.open(try_image))
-print('Normal Max search:', greedy_predictions_gen(encoding_dict=encoding_test, model=model,
-                                                   word2idx=word2idx, idx2word=idx2word,
-                                                   images=train_set.images_path, max_len=max_len)(try_image))
-for k in [3, 5, 7]:
-    print(f'Beam Search, k={k}:',
-          beam_search_predictions_gen(beam_index=k, encoding_dict=encoding_test, model=model,
-                                      word2idx=word2idx, idx2word=idx2word,
-                                      images=train_set.images_path, max_len=max_len)(try_image))
+plt.imshow(val_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
-
-print("BLEU Scores:")
-print("\tTrain")
-print_eval_metrics(img_cap_dict=train_d, encoding_dict=encoding_train, model=model,
-                   word2idx=word2idx, idx2word=idx2word,
-                   images=train_set.images_path, max_len=max_len)
-print("\tValidation")
-print_eval_metrics(img_cap_dict=val_d, encoding_dict=encoding_valid, model=model,
-                   word2idx=word2idx, idx2word=idx2word,
-                   images=train_set.images_path, max_len=max_len)
-print("\tTest")
-print_eval_metrics(img_cap_dict=test_d, encoding_dict=encoding_test, model=model,
-                   word2idx=word2idx, idx2word=idx2word,
-                   images=train_set.images_path, max_len=max_len)

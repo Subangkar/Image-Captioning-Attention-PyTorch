@@ -137,3 +137,11 @@ def padding_tensor(sequences, maxlen):
         length = tensor.size(0)
         out_tensor[i, :length] = tensor
     return out_tensor
+
+
+def accuracy_fn(ignore_value: int = 0):
+    def accuracy_ignoring_value(source: torch.Tensor, target: torch.Tensor):
+        mask = target != ignore_value
+        return (source[mask] == target[mask]).sum().item() / mask.sum().item()
+
+    return accuracy_ignoring_value
