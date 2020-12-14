@@ -127,25 +127,27 @@ decoder.eval()
 # %%
 t_i = 1003
 feat = encoder(train_set[t_i][0].unsqueeze(0))
-print(''.join([idx2word[idx.item()] + ' ' for idx in train_set[t_i][1]]))
 print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
+print(train_set.get_image_captions(t_i)[1])
 
 plt.imshow(train_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
 t_i = 2020
 feat = encoder(val_set[t_i][0].unsqueeze(0))
-print(''.join([idx2word[idx.item()] + ' ' for idx in val_set[t_i][1]]))
+
 print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
+print(val_set.get_image_captions(t_i)[1])
 
 plt.imshow(val_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
 t_i = 2020
 feat = encoder(test_set[t_i][0].unsqueeze(0))
-print(''.join([idx2word[idx.item()] + ' ' for idx in test_set[t_i][1]]))
-print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
 
-plt.imshow(val_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
+print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
+print(test_set.get_image_captions(t_i)[1])
+
+plt.imshow(test_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
