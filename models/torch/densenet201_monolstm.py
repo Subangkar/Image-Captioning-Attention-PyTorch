@@ -3,22 +3,25 @@ import torch.nn as nn
 import torchvision.models as models
 from torch.nn import functional as F
 
+from models.torch.layers import embedding_layer
+
 
 class Encoder(nn.Module):
     def __init__(self, embed_size):
-        """Load the pretrained ResNet-50 and replace top classifier layer."""
+        """Load the pretrained densenet201-50 and replace top classifier layer."""
         super(Encoder, self).__init__()
         densenet = torch.hub.load('pytorch/vision:v0.6.0', 'densenet201', pretrained=True)
         modules = list(densenet.children())[:-1]
-        self.resnet = nn.Sequential(*modules)
+        self.densenet = nn.Sequential(*modules)
         self.embed = nn.Linear(densenet.classifier.in_features, embed_size)
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
 
     def forward(self, images):
         """Extract feature vectors from input images."""
         with torch.no_grad():
-            features = self.resnet(images)
-        features = features.view(features.size(0), -1)
+            features = self.densenet(images)
+            features = F.relu(features, inplace=True)
+            features = F.avg_pool2d(features, kernel_size=7).view(features.size(0), -1)
         features = self.embed(features)
         features = self.bn(features)
         return features
