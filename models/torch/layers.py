@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 
@@ -27,13 +28,9 @@ class TimeDistributed(nn.Module):
 
 
 def embedding_layer(trainable=True, embedding_matrix=None, **kwargs):
-    emb_layer = None
+    emb_layer = nn.Embedding(**kwargs)
     if embedding_matrix is not None:
-        num_embeddings, embedding_dim = embedding_matrix.size()
-        emb_layer = nn.Embedding(num_embeddings=num_embeddings, embedding_dim=embedding_dim, **kwargs)
-        emb_layer.load_state_dict({'weight': embedding_matrix})
-    else:
-        emb_layer = nn.Embedding(**kwargs)
+        emb_layer.weight = nn.Parameter(torch.from_numpy(embedding_matrix).float())
     trainable = (embedding_matrix is None) or trainable
     if not trainable:
         emb_layer.weight.requires_grad = False

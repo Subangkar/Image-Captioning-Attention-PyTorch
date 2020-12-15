@@ -44,6 +44,10 @@ LR = 1e-2
 MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
 NUM_EPOCHS = 2
 
+# %%
+embedding_matrix = embedding_matrix_creator(embedding_dim=EMBEDDING_DIM, word2idx=word2idx)
+embedding_matrix.shape
+
 
 # %%
 
@@ -70,10 +74,6 @@ def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, des
 
     return running_loss / len(train_loader)
 
-
-# %%
-embedding_matrix = embedding_matrix_creator(embedding_dim=EMBEDDING_DIM, word2idx=word2idx)
-embedding_matrix.shape
 
 # %%
 
@@ -107,8 +107,11 @@ eval_transformations = transforms.Compose([
                          (0.229, 0.224, 0.225))
 ])
 
-# %%
 train_set.transformations = train_transformations
+val_set.transformations = eval_transformations
+test_set.transformations = eval_transformations
+
+# %%
 train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, sampler=None, pin_memory=False)
 train_loss_min = 100
 for epoch in range(NUM_EPOCHS):
@@ -131,6 +134,7 @@ final_model.eval()
 
 # %%
 model = final_model
+
 # %%
 t_i = 1003
 dset = train_set
@@ -141,7 +145,6 @@ print(dset.get_image_captions(t_i)[1])
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
-val_set.transformations = eval_transformations
 t_i = 2020
 im, cp = dset[t_i]
 print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
@@ -150,7 +153,6 @@ print(dset.get_image_captions(t_i)[1])
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
-test_set.transformations = eval_transformations
 t_i = 2020
 im, cp = dset[t_i]
 print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
