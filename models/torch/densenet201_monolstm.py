@@ -25,10 +25,11 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_size, hidden_size, vocab_size, num_layers=1):
+    def __init__(self, embed_size, hidden_size, vocab_size, num_layers=1, embedding_matrix=None, train_embd=True):
         """Set the hyper-parameters and build the layers."""
         super(Decoder, self).__init__()
-        self.embed = nn.Embedding(vocab_size, embed_size)
+        self.embed = embedding_layer(num_embeddings=vocab_size, embedding_dim=embed_size,
+                                     embedding_matrix=embedding_matrix, trainable=train_embd)
         self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True)
         self.linear = nn.Linear(hidden_size, vocab_size)
 
@@ -110,7 +111,7 @@ class Decoder(nn.Module):
 
 
 class Captioner(nn.Module):
-    def __init__(self, embed_size, hidden_size, vocab_size, num_layers=1):
+    def __init__(self, embed_size, hidden_size, vocab_size, num_layers=1, embedding_matrix=None, train_embd=True):
         super().__init__()
         self.encoder = Encoder(embed_size)
         self.decoder = Decoder(embed_size, hidden_size, vocab_size, num_layers)

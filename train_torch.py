@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm, trange
 from matplotlib import pyplot as plt
 
+from glove import embedding_matrix_creator
 from utils_torch import *
 from datasets.flickr8k import Flickr8kDataset
 
@@ -71,19 +72,22 @@ def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, des
 
 
 # %%
+embedding_matrix = embedding_matrix_creator(embedding_dim=EMBEDDING_DIM, word2idx=word2idx)
+embedding_matrix.shape
 
-from models.torch.resnet50_monolstm import Captioner
+# %%
 
-final_model = Captioner(EMBEDDING_DIM, 256, vocab_size, num_layers=2).to(device)
+from models.torch.densenet201_monolstm import Captioner
+
+final_model = Captioner(EMBEDDING_DIM, 256, vocab_size, num_layers=2,
+                        embedding_matrix=embedding_matrix, train_embd=False).to(device)
 
 loss_fn = torch.nn.CrossEntropyLoss(ignore_index=train_set.pad_value).to(device)
 acc_fn = accuracy_fn(ignore_value=train_set.pad_value)
 
-# Specify the learnable parameters of the model
 params = list(final_model.decoder.parameters()) + list(final_model.encoder.embed.parameters()) + list(
     final_model.encoder.bn.parameters())
 
-# Define the optimizer
 optimizer = torch.optim.Adam(params=params, lr=LR)
 
 # %%

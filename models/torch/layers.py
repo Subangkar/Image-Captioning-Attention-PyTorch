@@ -24,3 +24,17 @@ class TimeDistributed(nn.Module):
             y = y.view(-1, x.size(1), y.size(-1))  # (timesteps, samples, output_size)
 
         return y
+
+
+def embedding_layer(trainable=True, embedding_matrix=None, **kwargs):
+    emb_layer = None
+    if embedding_matrix is not None:
+        num_embeddings, embedding_dim = embedding_matrix.size()
+        emb_layer = nn.Embedding(num_embeddings=num_embeddings, embedding_dim=embedding_dim, **kwargs)
+        emb_layer.load_state_dict({'weight': embedding_matrix})
+    else:
+        emb_layer = nn.Embedding(**kwargs)
+    trainable = (embedding_matrix is None) or trainable
+    if not trainable:
+        emb_layer.weight.requires_grad = False
+    return emb_layer
