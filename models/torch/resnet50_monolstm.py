@@ -49,16 +49,16 @@ class Decoder(nn.Module):
         outputs = self.linear(hiddens)
         return outputs
 
-    def sample(self, features, states=None, max_len=40):
-        """Accept a pre-processed image tensor (inputs) and return predicted 
+    def sample(self, features, states=None, max_len=40, endseq_idx=-1):
+        """Accept a pre-processed image tensor (inputs) and return predicted
         sentence (list of tensor ids of length max_len). This is the greedy
         search approach.
         limited to single element batch as input
         features = [1, embed_dim]
         inputs = [1, 1, embed_dim]
         """
-        sampled_ids = []
         inputs = features.unsqueeze(1)
+        sampled_ids = []
         for i in range(max_len):
             # [1, 1, 256]
             hiddens, states = self.lstm(inputs, states)
@@ -68,16 +68,18 @@ class Decoder(nn.Module):
             # represents a word
             # [1]
             predicted = outputs.argmax(1)
-            # print(predicted.shape)
+            if predicted.item() == endseq_idx:
+                break
             sampled_ids.append(predicted.item())
             inputs = self.embed(predicted)
             inputs = inputs.unsqueeze(1)
         return sampled_ids
 
-    def sample_beam_search(self, inputs, states=None, max_len=40, beam_width=5):
-        """Accept a pre-processed image tensor and return the top predicted 
+    def sample_beam_search(self, features, states=None, max_len=40, beam_width=5):
+        """Accept a pre-processed image tensor and return the top predicted
         sentences. This is the beam search approach.
         """
+        inputs = features.unsqueeze(1)
         # Top word idx sequences and their corresponding inputs and states
         idx_sequences = [[[], 0.0, inputs, states]]
         for _ in range(max_len):
@@ -117,3 +119,8 @@ class Captioner(nn.Module):
         features = self.encoder(images)
         outputs = self.decoder(features, captions)
         return outputs
+
+    def sample(self, images, max_len=40, endseq_idx=-1):
+        features = self.encoder(images)
+        captions = self.decoder(features, max_len, endseq_idx)
+        return captions

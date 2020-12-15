@@ -33,6 +33,16 @@ vocab_size, max_len
 samples_per_epoch = len(train_set)
 samples_per_epoch
 
+# %%
+
+MODEL = "resnet50_monolstm"
+EMBEDDING_DIM = 50
+EMBEDDING = f"GLV{EMBEDDING_DIM}"
+BATCH_SIZE = 16
+LR = 1e-2
+MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
+NUM_EPOCHS = 2
+
 
 # %%
 
@@ -62,16 +72,6 @@ def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, des
 
 # %%
 
-MODEL = "resnet50_monolstm"
-EMBEDDING_DIM = 50
-EMBEDDING = f"GLV{EMBEDDING_DIM}"
-BATCH_SIZE = 16
-LR = 1e-2
-MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
-NUM_EPOCHS = 2
-
-# %%
-
 from models.torch.resnet50_monolstm import Captioner
 
 final_model = Captioner(EMBEDDING_DIM, 256, vocab_size, num_layers=2).to(device)
@@ -87,7 +87,7 @@ params = list(final_model.decoder.parameters()) + list(final_model.encoder.embed
 optimizer = torch.optim.Adam(params=params, lr=LR)
 
 # %%
-train_set.transformations = transforms.Compose([
+train_transformations = transforms.Compose([
     transforms.Resize(256),  # smaller edge of image resized to 256
     transforms.RandomCrop(224),  # get 224x224 crop from random location
     transforms.RandomHorizontalFlip(p=0.5),
@@ -95,6 +95,16 @@ train_set.transformations = transforms.Compose([
     transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
                          (0.229, 0.224, 0.225))
 ])
+eval_transformations = transforms.Compose([
+    transforms.Resize(256),  # smaller edge of image resized to 256
+    transforms.CenterCrop(224),  # get 224x224 crop from random location
+    transforms.ToTensor(),  # convert the PIL Image to a tensor
+    transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
+                         (0.229, 0.224, 0.225))
+])
+
+# %%
+train_set.transformations = train_transformations
 train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, sampler=None, pin_memory=False)
 train_loss_min = 100
 for epoch in range(NUM_EPOCHS):
@@ -115,44 +125,33 @@ for epoch in range(NUM_EPOCHS):
 torch.save(final_model, f'{MODEL_NAME}_ep{5:02d}_weights.pt')
 final_model.eval()
 
-encoder = final_model.encoder
-decoder = final_model.decoder
-
+# %%
+model = final_model
 # %%
 t_i = 1003
-feat = encoder(train_set[t_i][0].unsqueeze(0))
-print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
-print(train_set.get_image_captions(t_i)[1])
+dset = train_set
+im, cp = dset[t_i]
+print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
+print(dset.get_image_captions(t_i)[1])
 
-plt.imshow(train_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
-
-# %%
-eval_transformations = transforms.Compose([
-    transforms.Resize(256),  # smaller edge of image resized to 256
-    transforms.CenterCrop(224),  # get 224x224 crop from random location
-    transforms.ToTensor(),  # convert the PIL Image to a tensor
-    transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
-                         (0.229, 0.224, 0.225))
-])
+plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
 val_set.transformations = eval_transformations
 t_i = 2020
-feat = encoder(val_set[t_i][0].unsqueeze(0))
+im, cp = dset[t_i]
+print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
+print(dset.get_image_captions(t_i)[1])
 
-print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
-print(val_set.get_image_captions(t_i)[1])
-
-plt.imshow(val_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
+plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
 test_set.transformations = eval_transformations
 t_i = 2020
-feat = encoder(test_set[t_i][0].unsqueeze(0))
+im, cp = dset[t_i]
+print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
+print(dset.get_image_captions(t_i)[1])
 
-print(''.join([idx2word[idx] + ' ' for idx in decoder.sample(feat.unsqueeze(1))]))
-print(test_set.get_image_captions(t_i)[1])
-
-plt.imshow(test_set[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
+plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
