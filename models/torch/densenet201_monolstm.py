@@ -33,9 +33,9 @@ class Captioner(nn.Module):
         self.decoder = Decoder(embed_size, hidden_size, vocab_size, num_layers,
                                embedding_matrix=embedding_matrix, train_embd=train_embd)
 
-    def forward(self, images, captions):
+    def forward(self, images, captions, lengths):
         features = self.encoder(images)
-        outputs = self.decoder(features, captions)
+        outputs = self.decoder(features, captions, lengths)
         return outputs
 
     def sample(self, images, max_len=40, endseq_idx=-1):

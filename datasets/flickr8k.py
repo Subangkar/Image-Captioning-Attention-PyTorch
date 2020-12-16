@@ -170,7 +170,7 @@ class Flickr8kDataset(Dataset):
         img_tens = self.transformations(img_tens).to(self.device)
         cap_tens = self.torch.LongTensor(self.max_len).fill_(self.pad_value)
         cap_tens[:len(cap_toks)] = self.torch.LongTensor([self.word2idx[word] for word in cap_toks])
-        return img_tens, cap_tens, self.torch.LongTensor([len(cap_toks)])
+        return img_tens, cap_tens, len(cap_toks)
 
     def __getitem__corpus(self, index: int):
         imgname = self.db[index][0]
