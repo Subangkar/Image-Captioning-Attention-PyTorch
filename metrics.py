@@ -1,3 +1,4 @@
+import torch
 from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 from nltk.translate.bleu_score import SmoothingFunction
 
@@ -28,3 +29,11 @@ def bleu_score_fn(method_no: int = 4, ref_type='corpus'):
         return bleu_score_corpus
     elif ref_type == 'sentence':
         return bleu_score_sentence
+
+
+def accuracy_fn(ignore_value: int = 0):
+    def accuracy_ignoring_value(source: torch.Tensor, target: torch.Tensor):
+        mask = target != ignore_value
+        return (source[mask] == target[mask]).sum().item() / mask.sum().item()
+
+    return accuracy_ignoring_value

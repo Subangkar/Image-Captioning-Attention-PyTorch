@@ -1,6 +1,7 @@
+import itertools
+
 import numpy as np
 import torch
-from torchvision import transforms
 from PIL import Image
 from tqdm.auto import tqdm
 from nltk.translate.bleu_score import sentence_bleu
@@ -139,9 +140,17 @@ def padding_tensor(sequences, maxlen):
     return out_tensor
 
 
-def accuracy_fn(ignore_value: int = 0):
-    def accuracy_ignoring_value(source: torch.Tensor, target: torch.Tensor):
-        mask = target != ignore_value
-        return (source[mask] == target[mask]).sum().item() / mask.sum().item()
+def words_from_tensors_fn(idx2word, max_len=40, startseq='<start>', endseq='<end>'):
+    def words_from_tensors(captions: np.array) -> list:
+        """
+        :param captions: [b, max_len]
+        :return:
+        """
+        captoks = []
+        for capidx in captions:
+            # capidx = [1, max_len]
+            captoks.append(list(itertools.takewhile(lambda word: word != endseq,
+                                                    map(lambda idx: idx2word[idx], iter(capidx))))[1:])
+        return captoks
 
-    return accuracy_ignoring_value
+    return words_from_tensors

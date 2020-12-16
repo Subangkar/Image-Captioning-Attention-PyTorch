@@ -1,9 +1,11 @@
 # %%
 from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
+from torchvision import transforms
 
 from datasets.flickr8k import Flickr8kDataset
 from glove import embedding_matrix_creator
+from metrics import *
 from utils_torch import *
 
 # %%
@@ -16,20 +18,20 @@ DATASET_BASE_PATH = 'data/flickr8k/'
 # %%
 
 train_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='train', device=device,
+                            return_type='tensor',
                             load_img_to_memory=False)
 vocab, word2idx, idx2word, max_len = vocab_set = train_set.get_vocab()
-val_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='val', vocab_set=vocab_set, device=device)
-test_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='test', vocab_set=vocab_set, device=device)
+val_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='val', vocab_set=vocab_set, device=device,
+                          return_type='corpus',
+                          load_img_to_memory=False)
+test_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='test', vocab_set=vocab_set, device=device,
+                           return_type='corpus',
+                           load_img_to_memory=False)
 len(train_set), len(val_set), len(test_set)
 
 # %%
 vocab_size = len(vocab)
 vocab_size, max_len
-
-# %%
-
-samples_per_epoch = len(train_set)
-samples_per_epoch
 
 # %%
 
@@ -40,6 +42,7 @@ BATCH_SIZE = 16
 LR = 1e-2
 MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
 NUM_EPOCHS = 2
+SAVE_FREQ = 2
 
 # %%
 embedding_matrix = embedding_matrix_creator(embedding_dim=EMBEDDING_DIM, word2idx=word2idx)
@@ -72,6 +75,21 @@ def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, des
     return running_loss / len(train_loader)
 
 
+def evaluate_model(data_loader, model, loss_fn, vocab_size, bleu_score_fn, tensor_to_word_fn, desc=''):
+    running_bleu4 = 0.0
+    model.eval()
+    t = tqdm(iter(data_loader), desc=f'{desc}')
+    for batch_idx, batch in enumerate(t):
+        images, captions, lengths = batch
+        outputs = tensor_to_word_fn(model.sample(images).cpu().numpy())
+
+        running_bleu4 += bleu_score_fn(reference_corpus=captions, candidate_corpus=outputs)
+        t.set_postfix({'bleu4': running_bleu4 / (batch_idx + 1),
+                       }, refresh=True)
+
+    return running_bleu4 / len(data_loader)
+
+
 # %%
 
 from models.torch.densenet201_monolstm import Captioner
@@ -81,6 +99,9 @@ final_model = Captioner(EMBEDDING_DIM, 256, vocab_size, num_layers=2,
 
 loss_fn = torch.nn.CrossEntropyLoss(ignore_index=train_set.pad_value).to(device)
 acc_fn = accuracy_fn(ignore_value=train_set.pad_value)
+sentence_bleu_score_fn = bleu_score_fn(4, 'sentence')
+corpus_bleu_score_fn = bleu_score_fn(4, 'corpus')
+tensor_to_word_fn = words_from_tensors_fn(idx2word=idx2word)
 
 params = list(final_model.decoder.parameters()) + list(final_model.encoder.embed.parameters()) + list(
     final_model.encoder.bn.parameters())
@@ -109,8 +130,15 @@ val_set.transformations = eval_transformations
 test_set.transformations = eval_transformations
 
 # %%
+eval_collate_fn = lambda batch: (torch.stack([x[0] for x in batch]), [x[1] for x in batch], [x[2] for x in batch])
 train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, sampler=None, pin_memory=False)
+val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None, pin_memory=False,
+                        collate_fn=eval_collate_fn)
+test_loader = DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None, pin_memory=False,
+                         collate_fn=eval_collate_fn)
+# %%
 train_loss_min = 100
+val_bleu4_max = 0.0
 for epoch in range(NUM_EPOCHS):
     train_loss = train_model(desc=f'Epoch {epoch + 1}/{NUM_EPOCHS}', model=final_model,
                              optimizer=optimizer, loss_fn=loss_fn, acc_fn=acc_fn,
@@ -120,7 +148,16 @@ for epoch in range(NUM_EPOCHS):
         'state_dict': final_model.state_dict(),
         'optimizer': optimizer.state_dict()
     }
-    if (epoch + 1) % 2 == 0:
+    with torch.no_grad():
+        val_bleu4 = evaluate_model(desc=f'Epoch {epoch + 1}/{NUM_EPOCHS} Validation', model=final_model,
+                                   loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                                   tensor_to_word_fn=tensor_to_word_fn,
+                                   data_loader=val_loader, vocab_size=vocab_size)
+        if val_bleu4 > val_bleu4_max:
+            val_bleu4 = val_bleu4_max
+            torch.save(state, f'{MODEL_NAME}''_best_val.pt')
+
+    if (epoch + 1) % SAVE_FREQ == 0:
         torch.save(state, f'{MODEL_NAME}_ep{epoch + 1:02d}_weights.pt')
     if train_loss < train_loss_min:
         train_loss_min = train_loss
@@ -142,21 +179,42 @@ print(dset.get_image_captions(t_i)[1])
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
-t_i = 2020
+t_i = 500
 dset = val_set
 im, cp, _ = dset[t_i]
 print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
-print(dset.get_image_captions(t_i)[1])
+print(cp)
 
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
-t_i = 2020
+t_i = 500
 dset = test_set
 im, cp, _ = dset[t_i]
 print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
-print(dset.get_image_captions(t_i)[1])
+print(cp)
 
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
+train_eval_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='train', vocab_set=vocab_set, device=device,
+                                 return_type='corpus', transformations=eval_transformations)
+train_eval_loader = DataLoader(train_eval_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None, pin_memory=False,
+                               collate_fn=eval_collate_fn)
+with torch.no_grad():
+    model.eval()
+    train_bleu4 = evaluate_model(desc=f'Train: ', model=final_model,
+                                 loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                                 tensor_to_word_fn=tensor_to_word_fn,
+                                 data_loader=train_eval_loader, vocab_size=vocab_size)
+    val_bleu4 = evaluate_model(desc=f'Val: ', model=final_model,
+                               loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                               tensor_to_word_fn=tensor_to_word_fn,
+                               data_loader=val_loader, vocab_size=vocab_size)
+    test_bleu4 = evaluate_model(desc=f'Test: ', model=final_model,
+                                loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                                tensor_to_word_fn=tensor_to_word_fn,
+                                data_loader=test_loader, vocab_size=vocab_size)
+    print('Train Bleu-4:', train_bleu4)
+    print('Valid Bleu-4:', val_bleu4)
+    print('Test Bleu-4:', test_bleu4)
