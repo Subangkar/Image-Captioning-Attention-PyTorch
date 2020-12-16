@@ -32,29 +32,25 @@ class Decoder(nn.Module):
         return outputs
 
     def sample(self, features, states=None, max_len=40, endseq_idx=-1):
-        """Accept a pre-processed image tensor (inputs) and return predicted
-        sentence (list of tensor ids of length max_len). This is the greedy
-        search approach.
-        limited to single element batch as input
-        features = [1, embed_dim]
-        inputs = [1, 1, embed_dim]
+        """Samples captions in batch for given image features (Greedy search).
+        features = [b, embed_dim]
+        inputs = [b, 1, embed_dim]
+        :return [b, max_len]
         """
         inputs = features.unsqueeze(1)
         sampled_ids = []
         for i in range(max_len):
-            # [1, 1, 256]
+            # [b, 1, hidden_size]
             hiddens, states = self.lstm(inputs, states)
-            # [1, 1, 256] -> [1, 256] -> [1, 8254]
-            outputs = self.linear(hiddens.squeeze(1))
-            # Get the index (in the vocabulary) of the most likely integer that
-            # represents a word
-            # [1]
+            # [b, 1, hidden_size] -> [b, hidden_size] -> [b, vocab_size]
+            outputs = self.linear(hiddens.squeeze(1))  # (batch_size, vocab_size)
+            # [b]
             predicted = outputs.argmax(1)
-            if predicted.item() == endseq_idx:
-                break
-            sampled_ids.append(predicted.item())
-            inputs = self.embed(predicted)
-            inputs = inputs.unsqueeze(1)
+            sampled_ids.append(predicted)
+            # [b] -> [b, embed_dim] -> [b, 1, embed_dim]
+            inputs = self.embed(predicted).unsqueeze(1)
+        # [b, max_len]
+        sampled_ids = torch.stack(sampled_ids, 1)
         return sampled_ids
 
     def sample_beam_search(self, features, states=None, max_len=40, beam_width=5):

@@ -1,13 +1,10 @@
 # %%
-from IPython.core.display import display
-import torch
-from torch.utils.data import DataLoader
-from tqdm.auto import tqdm, trange
 from matplotlib import pyplot as plt
+from torch.utils.data import DataLoader
 
+from datasets.flickr8k import Flickr8kDataset
 from glove import embedding_matrix_creator
 from utils_torch import *
-from datasets.flickr8k import Flickr8kDataset
 
 # %%
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -138,24 +135,26 @@ model = final_model
 # %%
 t_i = 1003
 dset = train_set
-im, cp = dset[t_i]
-print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
+im, cp, _ = dset[t_i]
+print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
 print(dset.get_image_captions(t_i)[1])
 
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
 t_i = 2020
-im, cp = dset[t_i]
-print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
+dset = val_set
+im, cp, _ = dset[t_i]
+print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
 print(dset.get_image_captions(t_i)[1])
 
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
 
 # %%
 t_i = 2020
-im, cp = dset[t_i]
-print(''.join([idx2word[idx] + ' ' for idx in model.sample(im.unsqueeze(0))]))
+dset = test_set
+im, cp, _ = dset[t_i]
+print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
 print(dset.get_image_captions(t_i)[1])
 
 plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
