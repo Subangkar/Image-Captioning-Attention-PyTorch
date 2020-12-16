@@ -1,6 +1,6 @@
-from collections import defaultdict
+import os.path
 import re
-import os.path, sys
+import sys
 
 sys.path.append(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 from project_enums import DatasetChoice

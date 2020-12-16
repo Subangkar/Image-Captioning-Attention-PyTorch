@@ -1,6 +1,6 @@
 import torch
-from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 from nltk.translate.bleu_score import SmoothingFunction
+from nltk.translate.bleu_score import corpus_bleu, sentence_bleu
 
 
 def bleu_score_fn(method_no: int = 4, ref_type='corpus'):

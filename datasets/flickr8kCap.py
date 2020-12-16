@@ -1,8 +1,9 @@
 import glob
-import pandas as pd
-import numpy as np
-from keras.preprocessing import sequence
 import io
+
+import numpy as np
+import pandas as pd
+from keras.preprocessing import sequence
 
 from utils import split_data
 

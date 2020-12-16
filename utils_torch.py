@@ -3,8 +3,8 @@ import itertools
 import numpy as np
 import torch
 from PIL import Image
-from tqdm.auto import tqdm
 from nltk.translate.bleu_score import sentence_bleu
+from tqdm.auto import tqdm
 
 
 def preprocess_input(x):
