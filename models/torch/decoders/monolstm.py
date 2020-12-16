@@ -1,6 +1,7 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
+from torch.nn.utils.rnn import pack_padded_sequence
 
 from models.torch.layers import embedding_layer
 
@@ -18,6 +19,7 @@ class Decoder(nn.Module):
         """Decode image feature vectors and generates captions.
         features = [b, 300]
         captions = [b, max_len]
+        :return [sum_len, vocab_size]
         """
         # [b, max_len] -> [b, max_len-1]
         captions = captions[:, :-1]
@@ -25,10 +27,12 @@ class Decoder(nn.Module):
         embeddings = self.embed(captions)
         # [b, max_len, embed_dim]
         inputs = torch.cat((features.unsqueeze(1), embeddings), 1)
-        # [b, max_len, hidden_size]
-        hiddens, _ = self.lstm(inputs)
-        # [b, max_len, vocab_size]
-        outputs = self.linear(hiddens)
+        # (0)[sum_len, embed_dim]
+        inputs_packed = pack_padded_sequence(inputs, lengths=lengths, batch_first=True, enforce_sorted=True)
+        # (0)[sum_len, embed_dim]
+        hiddens, _ = self.lstm(inputs_packed)
+        # [sum_len, vocab_size]
+        outputs = self.linear(hiddens[0])
         return outputs
 
     def sample(self, features, states=None, max_len=40, endseq_idx=-1):

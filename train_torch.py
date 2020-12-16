@@ -1,5 +1,6 @@
 # %%
 from matplotlib import pyplot as plt
+from torch.nn.utils.rnn import pack_padded_sequence
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
@@ -58,15 +59,22 @@ def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, des
     t = tqdm(iter(train_loader), desc=f'{desc}')
     for batch_idx, batch in enumerate(t):
         images, captions, lengths = batch
+        sort_ind = torch.argsort(lengths, descending=True)
+        images = images[sort_ind]
+        captions = captions[sort_ind]
+        lengths = lengths[sort_ind]
 
         optimizer.zero_grad()
-        outputs = model(images, captions)
+        # [sum_len, vocab_size]
+        outputs = model(images, captions, lengths)
+        # [b, max_len] -> [sum_len]
+        targets = pack_padded_sequence(captions, lengths=lengths, batch_first=True, enforce_sorted=True)[0]
 
-        loss = loss_fn(outputs.view(-1, vocab_size), captions.view(-1))
+        loss = loss_fn(outputs, targets)
         loss.backward()
         optimizer.step()
 
-        running_acc += acc_fn(torch.argmax(outputs.view(-1, vocab_size), dim=1), captions.view(-1))
+        running_acc += (torch.argmax(outputs, dim=1) == targets).sum().float().item() / targets.size(0)
         running_loss += loss.item()
         t.set_postfix({'loss': running_loss / (batch_idx + 1),
                        'acc': running_acc / (batch_idx + 1),
