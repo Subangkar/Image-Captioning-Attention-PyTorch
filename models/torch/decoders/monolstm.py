@@ -12,7 +12,7 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.embed = embedding_layer(num_embeddings=vocab_size, embedding_dim=embed_size,
                                      embedding_matrix=embedding_matrix, trainable=train_embd)
-        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(embed_size, hidden_size, num_layers, batch_first=True, dropout=0.5)
         self.linear = nn.Linear(hidden_size, vocab_size)
 
     def forward(self, features, captions, lengths):

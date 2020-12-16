@@ -12,7 +12,10 @@ class Encoder(nn.Module):
         densenet = torch.hub.load('pytorch/vision:v0.6.0', 'densenet201', pretrained=True)
         modules = list(densenet.children())[:-1]
         self.densenet = nn.Sequential(*modules)
-        self.embed = nn.Linear(densenet.classifier.in_features, embed_size)
+        self.embed = nn.Sequential(
+            nn.Linear(densenet.classifier.in_features, embed_size),
+            nn.Dropout(p=0.5),
+        )
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
 
     def forward(self, images):
