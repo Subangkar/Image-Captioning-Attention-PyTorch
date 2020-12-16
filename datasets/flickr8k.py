@@ -1,18 +1,17 @@
 import math
 import os
+import ntpath
 
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
 import glob
 import pandas as pd
-import numpy as np
 import io
 from torchvision import transforms
 import nltk
 
 from utils_torch import split_data
-from utils_torch import padding_tensor
 
 
 class Flickr8kDataset(Dataset):
@@ -51,7 +50,7 @@ class Flickr8kDataset(Dataset):
 
         self.imgpath_list = glob.glob(self.images_path + '*.jpg')
         self.all_imgname_to_caplist = self.__all_imgname_to_caplist_dict()
-        self.imgpath_to_caplist = self.__get_imgpath_to_caplist_dict(self.__get_imgpath_list(dist=dist))
+        self.imgname_to_caplist = self.__get_imgname_to_caplist_dict(self.__get_imgpath_list(dist=dist))
 
         self.transformations = transformations if transformations is not None else transforms.Compose([
             transforms.ToTensor()
@@ -80,11 +79,11 @@ class Flickr8kDataset(Dataset):
                 imgname_to_caplist[row[0]] = [row[1]]
         return imgname_to_caplist
 
-    def __get_imgpath_to_caplist_dict(self, img_path_list):
+    def __get_imgname_to_caplist_dict(self, img_path_list):
         d = {}
         for i in img_path_list:
             if i[len(self.images_path):] in self.all_imgname_to_caplist:
-                d[i] = self.all_imgname_to_caplist[i[len(self.images_path):]]
+                d[ntpath.basename(i)] = self.all_imgname_to_caplist[i[len(self.images_path):]]
         return d
 
     def __get_imgpath_list(self, dist='val'):
@@ -95,7 +94,7 @@ class Flickr8kDataset(Dataset):
     def __construct_vocab(self):
         words = [self.startseq, self.endseq, self.unkseq, self.padseq]
         max_len = 0
-        for key, caplist in self.imgpath_to_caplist.items():
+        for _, caplist in self.imgname_to_caplist.items():
             for cap in caplist:
                 cap_words = nltk.word_tokenize(cap)
                 words.extend(cap_words)
@@ -111,30 +110,31 @@ class Flickr8kDataset(Dataset):
         return self.vocab, self.word2idx, self.idx2word, self.max_len
 
     def get_db(self):
-        # ----- Forming a df to sample from ------
-        l = ["image_id\tcaption\tcaption_length\n"]
 
         if self.load_img_to_memory:
             self.pil_d = {}
-            for imgpath in self.imgpath_to_caplist.keys():
-                self.pil_d[imgpath[len(self.images_path):]] = Image.open(imgpath).convert('RGB')
+            for imgname in self.imgname_to_caplist.keys():
+                self.pil_d[imgname] = Image.open(os.path.join(self.images_path, imgname)).convert('RGB')
 
         if self.return_type == 'corpus':
             df = []
-            for imgpath, caplist in self.imgpath_to_caplist.items():
+            for imgname, caplist in self.imgname_to_caplist.items():
                 cap_wordlist = []
                 cap_lenlist = []
                 for caption in caplist:
                     toks = nltk.word_tokenize(caption)
                     cap_wordlist.append(toks)
                     cap_lenlist.append(len(toks))
-                df.append([imgpath[len(self.images_path):], cap_wordlist, cap_lenlist])
+                df.append([imgname, cap_wordlist, cap_lenlist])
             return df
 
-        for imgpath, caplist in self.imgpath_to_caplist.items():
+        # ----- Forming a df to sample from ------
+        l = ["image_id\tcaption\tcaption_length\n"]
+
+        for imgname, caplist in self.imgname_to_caplist.items():
             for cap in caplist:
                 l.append(
-                    f"{imgpath[len(self.images_path):]}\t"
+                    f"{imgname}\t"
                     f"{cap}\t"
                     f"{len(nltk.word_tokenize(cap))}\n")
         img_id_cap_str = ''.join(l)
@@ -158,7 +158,7 @@ class Flickr8kDataset(Dataset):
         :returns: image_path, list_of_captions
         """
         imgname = self.db[index][0]
-        return os.path.join(self.images_path, imgname), self.imgpath_to_caplist[os.path.join(self.images_path, imgname)]
+        return os.path.join(self.images_path, imgname), self.imgname_to_caplist[imgname]
 
     def __getitem__tensor(self, index: int):
         imgname = self.db[index][0]
