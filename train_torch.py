@@ -1,4 +1,5 @@
 # %%
+import wandb
 from matplotlib import pyplot as plt
 from torch.nn.utils.rnn import pack_padded_sequence
 from torch.utils.data import DataLoader
@@ -44,6 +45,20 @@ LR = 1e-2
 MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
 NUM_EPOCHS = 2
 SAVE_FREQ = 2
+LOG_INTERVAL = 25
+
+run = wandb.init(project='image-captioning',
+                 entity='datalab-buet',
+                 name=f"{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}-{1}",
+                 # tensorboard=True, sync_tensorboard=True,
+                 config={"learning_rate": LR,
+                         "epochs": NUM_EPOCHS,
+                         "batch_size": BATCH_SIZE,
+                         "model": MODEL,
+                         "embedding": EMBEDDING,
+                         "embedding_dim": EMBEDDING_DIM,
+                         },
+                 reinit=True)
 
 # %%
 embedding_matrix = embedding_matrix_creator(embedding_dim=EMBEDDING_DIM, word2idx=word2idx)
@@ -79,6 +94,11 @@ def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, des
         t.set_postfix({'loss': running_loss / (batch_idx + 1),
                        'acc': running_acc / (batch_idx + 1),
                        }, refresh=True)
+        if (batch_idx + 1) % LOG_INTERVAL == 0:
+            wandb.log({
+                'train_loss': running_loss / (batch_idx + 1),
+                'train_acc': running_acc / (batch_idx + 1),
+            })
 
     return running_loss / len(train_loader)
 
@@ -115,6 +135,10 @@ params = list(final_model.decoder.parameters()) + list(final_model.encoder.embed
     final_model.encoder.bn.parameters())
 
 optimizer = torch.optim.Adam(params=params, lr=LR)
+
+wandb.watch(final_model, log='all', log_freq=50)
+wandb.watch(final_model.encoder, log='all', log_freq=50)
+wandb.watch(final_model.decoder, log='all', log_freq=50)
 
 # %%
 train_transformations = transforms.Compose([
@@ -161,17 +185,21 @@ for epoch in range(NUM_EPOCHS):
                                    loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
                                    tensor_to_word_fn=tensor_to_word_fn,
                                    data_loader=val_loader, vocab_size=vocab_size)
+        wandb.log({'val_bleu': val_bleu4})
         if val_bleu4 > val_bleu4_max:
             val_bleu4 = val_bleu4_max
             torch.save(state, f'{MODEL_NAME}''_best_val.pt')
+            wandb.save(f'{MODEL_NAME}''_best_val.pt')
 
     if (epoch + 1) % SAVE_FREQ == 0:
         torch.save(state, f'{MODEL_NAME}_ep{epoch + 1:02d}_weights.pt')
     if train_loss < train_loss_min:
         train_loss_min = train_loss
         torch.save(state, f'{MODEL_NAME}''_best_train.pt')
+        wandb.save(f'{MODEL_NAME}''_best_train.pt')
 
 torch.save(final_model, f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
+wandb.save(f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
 final_model.eval()
 
 # %%
@@ -226,3 +254,6 @@ with torch.no_grad():
     print('Train Bleu-4:', train_bleu4)
     print('Valid Bleu-4:', val_bleu4)
     print('Test Bleu-4:', test_bleu4)
+    wandb.run.summary["train_bleu4"] = train_bleu4
+    wandb.run.summary["val_bleu4"] = val_bleu4
+    wandb.run.summary["test_bleu4"] = test_bleu4
