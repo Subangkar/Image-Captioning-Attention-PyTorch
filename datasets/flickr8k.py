@@ -27,6 +27,7 @@ class Flickr8kDataset(Dataset):
                  transformations=None,
                  return_raw=False,
                  load_img_to_memory=False,
+                 return_type='tensor',
                  device=torch.device('cpu')):
         self.token = dataset_base_path + 'Flickr8k_text/Flickr8k.token.txt'
         self.images_path = dataset_base_path + 'Flicker8k_Dataset/'
@@ -44,6 +45,9 @@ class Flickr8kDataset(Dataset):
         self.torch = torch.cuda if (self.device.type == 'cuda') else torch
 
         self.return_raw = return_raw
+        self.return_type = return_type
+
+        self.__get_item__fn = self.__getitem__corpus if return_type == 'corpus' else self.__getitem__tensor
 
         self.imgpath_list = glob.glob(self.images_path + '*.jpg')
         self.all_imgname_to_caplist = self.__all_imgname_to_caplist_dict()
@@ -115,11 +119,23 @@ class Flickr8kDataset(Dataset):
             for imgpath in self.imgpath_to_caplist.keys():
                 self.pil_d[imgpath[len(self.images_path):]] = Image.open(imgpath).convert('RGB')
 
+        if self.return_type == 'corpus':
+            df = []
+            for imgpath, caplist in self.imgpath_to_caplist.items():
+                cap_wordlist = []
+                cap_lenlist = []
+                for caption in caplist:
+                    toks = nltk.word_tokenize(caption)
+                    cap_wordlist.append(toks)
+                    cap_lenlist.append(len(toks))
+                df.append([imgpath[len(self.images_path):], cap_wordlist, cap_lenlist])
+            return df
+
         for imgpath, caplist in self.imgpath_to_caplist.items():
             for cap in caplist:
                 l.append(
                     f"{imgpath[len(self.images_path):]}\t"
-                    f"{cap}\t"  # {self.startseq} {cap} {self.endseq}
+                    f"{cap}\t"
                     f"{len(nltk.word_tokenize(cap))}\n")
         img_id_cap_str = ''.join(l)
 
@@ -131,18 +147,7 @@ class Flickr8kDataset(Dataset):
         return 0
 
     def __getitem__(self, index: int):
-        imgname = self.db[index][0]
-        caption = self.db[index][1]
-        capt_ln = self.db[index][2]
-        if self.return_raw:
-            return os.path.join(self.images_path, imgname), caption, capt_ln
-        cap_toks = [self.startseq] + nltk.word_tokenize(self.db[index][1]) + [self.endseq]
-        img_tens = self.pil_d[imgname] if self.load_img_to_memory else Image.open(
-            os.path.join(self.images_path, imgname)).convert('RGB')
-        img_tens = self.transformations(img_tens).to(self.device)
-        cap_tens = self.torch.LongTensor(self.max_len).fill_(self.pad_value)
-        cap_tens[:len(cap_toks)] = self.torch.LongTensor([self.word2idx[word] for word in cap_toks])
-        return img_tens, cap_tens, self.torch.LongTensor([len(cap_toks)])
+        return self.__get_item__fn(index)
 
     def __len__(self):
         return len(self.db)
@@ -154,3 +159,24 @@ class Flickr8kDataset(Dataset):
         """
         imgname = self.db[index][0]
         return os.path.join(self.images_path, imgname), self.imgpath_to_caplist[os.path.join(self.images_path, imgname)]
+
+    def __getitem__tensor(self, index: int):
+        imgname = self.db[index][0]
+        caption = self.db[index][1]
+        capt_ln = self.db[index][2]
+        cap_toks = [self.startseq] + nltk.word_tokenize(caption) + [self.endseq]
+        img_tens = self.pil_d[imgname] if self.load_img_to_memory else Image.open(
+            os.path.join(self.images_path, imgname)).convert('RGB')
+        img_tens = self.transformations(img_tens).to(self.device)
+        cap_tens = self.torch.LongTensor(self.max_len).fill_(self.pad_value)
+        cap_tens[:len(cap_toks)] = self.torch.LongTensor([self.word2idx[word] for word in cap_toks])
+        return img_tens, cap_tens, self.torch.LongTensor([len(cap_toks)])
+
+    def __getitem__corpus(self, index: int):
+        imgname = self.db[index][0]
+        cap_wordlist = self.db[index][1]
+        cap_lenlist = self.db[index][2]
+        img_tens = self.pil_d[imgname] if self.load_img_to_memory else Image.open(
+            os.path.join(self.images_path, imgname)).convert('RGB')
+        img_tens = self.transformations(img_tens).to(self.device)
+        return img_tens, cap_wordlist, cap_lenlist

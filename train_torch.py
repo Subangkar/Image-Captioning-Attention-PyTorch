@@ -121,12 +121,12 @@ for epoch in range(NUM_EPOCHS):
         'optimizer': optimizer.state_dict()
     }
     if (epoch + 1) % 2 == 0:
-        torch.save(state, f'{MODEL_NAME}_ep{epoch:02d}_weights.pt')
+        torch.save(state, f'{MODEL_NAME}_ep{epoch + 1:02d}_weights.pt')
     if train_loss < train_loss_min:
         train_loss_min = train_loss
         torch.save(state, f'{MODEL_NAME}''_best_train.pt')
 
-torch.save(final_model, f'{MODEL_NAME}_ep{5:02d}_weights.pt')
+torch.save(final_model, f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
 final_model.eval()
 
 # %%
