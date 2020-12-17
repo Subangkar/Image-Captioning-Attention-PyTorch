@@ -40,6 +40,7 @@ vocab_size, max_len
 MODEL = "resnet50_monolstm"
 EMBEDDING_DIM = 50
 EMBEDDING = f"GLV{EMBEDDING_DIM}"
+HIDDEN_SIZE = 256
 BATCH_SIZE = 16
 LR = 1e-2
 MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
@@ -57,6 +58,7 @@ run = wandb.init(project='image-captioning',
                          "model": MODEL,
                          "embedding": EMBEDDING,
                          "embedding_dim": EMBEDDING_DIM,
+                         "hidden_size": HIDDEN_SIZE,
                          },
                  reinit=True)
 
@@ -125,7 +127,7 @@ def evaluate_model(data_loader, model, loss_fn, vocab_size, bleu_score_fn, tenso
 
 from models.torch.densenet201_monolstm import Captioner
 
-final_model = Captioner(EMBEDDING_DIM, 256, vocab_size, num_layers=2,
+final_model = Captioner(EMBEDDING_DIM, HIDDEN_SIZE, vocab_size, num_layers=2,
                         embedding_matrix=embedding_matrix, train_embd=False).to(device)
 
 loss_fn = torch.nn.CrossEntropyLoss(ignore_index=train_set.pad_value).to(device)
