@@ -95,7 +95,7 @@ class Flickr8kDataset(Dataset):
         max_len = 0
         for _, caplist in self.imgname_to_caplist.items():
             for cap in caplist:
-                cap_words = nltk.word_tokenize(cap)
+                cap_words = nltk.word_tokenize(cap.lower())
                 words.extend(cap_words)
                 max_len = max(max_len, len(cap_words) + 2)
         vocab = sorted(list(set(words)))
@@ -121,7 +121,7 @@ class Flickr8kDataset(Dataset):
                 cap_wordlist = []
                 cap_lenlist = []
                 for caption in caplist:
-                    toks = nltk.word_tokenize(caption)
+                    toks = nltk.word_tokenize(caption.lower())
                     cap_wordlist.append(toks)
                     cap_lenlist.append(len(toks))
                 df.append([imgname, cap_wordlist, cap_lenlist])
@@ -134,8 +134,8 @@ class Flickr8kDataset(Dataset):
             for cap in caplist:
                 l.append(
                     f"{imgname}\t"
-                    f"{cap}\t"
-                    f"{len(nltk.word_tokenize(cap))}\n")
+                    f"{cap.lower()}\t"
+                    f"{len(nltk.word_tokenize(cap.lower()))}\n")
         img_id_cap_str = ''.join(l)
 
         df = pd.read_csv(io.StringIO(img_id_cap_str), delimiter='\t')

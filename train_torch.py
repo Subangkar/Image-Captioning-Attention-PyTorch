@@ -1,4 +1,5 @@
 # %%
+import pickle
 import wandb
 from matplotlib import pyplot as plt
 from torch.nn.utils.rnn import pack_padded_sequence
@@ -29,6 +30,8 @@ val_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='val', vocab
 test_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='test', vocab_set=vocab_set, device=device,
                            return_type='corpus',
                            load_img_to_memory=False)
+with open('vocab_set.pkl', 'wb') as f:
+    pickle.dump(train_set.get_vocab(), f)
 len(train_set), len(val_set), len(test_set)
 
 # %%
@@ -144,6 +147,7 @@ optimizer = torch.optim.Adam(params=params, lr=LR)
 wandb.watch(final_model, log='all', log_freq=50)
 wandb.watch(final_model.encoder, log='all', log_freq=50)
 wandb.watch(final_model.decoder, log='all', log_freq=50)
+wandb.save('vocab_set.pkl')
 
 # %%
 train_transformations = transforms.Compose([
