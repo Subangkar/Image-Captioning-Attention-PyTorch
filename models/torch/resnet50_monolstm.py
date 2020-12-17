@@ -11,7 +11,10 @@ class Encoder(nn.Module):
         resnet = torch.hub.load('pytorch/vision:v0.6.0', 'resnet50', pretrained=True)
         modules = list(resnet.children())[:-1]
         self.resnet = nn.Sequential(*modules)
-        self.embed = nn.Linear(resnet.fc.in_features, embed_size)
+        self.embed = nn.Sequential(
+            nn.Linear(resnet.fc.in_features, embed_size),
+            nn.Dropout(p=0.5),
+        )
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
 
     def forward(self, images):

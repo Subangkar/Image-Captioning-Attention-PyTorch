@@ -10,14 +10,17 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         resnext = torch.hub.load('pytorch/vision:v0.6.0', 'resnext50_32x4d', pretrained=True)
         modules = list(resnext.children())[:-1]
-        self.resnet = nn.Sequential(*modules)
-        self.embed = nn.Linear(resnext.fc.in_features, embed_size)
+        self.resnext = nn.Sequential(*modules)
+        self.embed = nn.Sequential(
+            nn.Linear(resnext.fc.in_features, embed_size),
+            nn.Dropout(p=0.5),
+        )
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
 
     def forward(self, images):
         """Extract feature vectors from input images."""
         with torch.no_grad():
-            features = self.resnet(images)
+            features = self.resnext(images)
         features = features.view(features.size(0), -1)
         features = self.embed(features)
         features = self.bn(features)
