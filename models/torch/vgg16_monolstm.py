@@ -11,7 +11,7 @@ class Encoder(nn.Module):
         vgg16 = torch.hub.load('pytorch/vision:v0.6.0', 'vgg16', pretrained=True)
         vgg16.classifier = vgg16.classifier[:-1]
         self.vgg16 = vgg16
-        self.embed = nn.Linear(vgg16.classifier[-1].out_features, embed_size)
+        self.embed = nn.Linear(vgg16.classifier[-3].out_features, embed_size)  # FC-relu-dropout
         self.bn = nn.BatchNorm1d(embed_size, momentum=0.01)
 
     def forward(self, images):

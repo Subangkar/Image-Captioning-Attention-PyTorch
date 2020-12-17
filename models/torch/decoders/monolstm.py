@@ -60,6 +60,7 @@ class Decoder(nn.Module):
     def sample_beam_search(self, features, states=None, max_len=40, beam_width=5):
         """Accept a pre-processed image tensor and return the top predicted
         sentences. This is the beam search approach.
+        features = [b, embed_dim]
         """
         inputs = features.unsqueeze(1)
         # Top word idx sequences and their corresponding inputs and states
