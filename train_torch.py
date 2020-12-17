@@ -95,6 +95,9 @@ def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, des
                        'acc': running_acc / (batch_idx + 1),
                        }, refresh=True)
         if (batch_idx + 1) % LOG_INTERVAL == 0:
+            print(f'{desc} {batch_idx + 1}/{len(train_loader)} '
+                  f'train_loss: {running_loss / (batch_idx + 1):.4f} '
+                  f'train_acc: {running_acc / (batch_idx + 1):.4f}')
             wandb.log({
                 'train_loss': running_loss / (batch_idx + 1),
                 'train_acc': running_acc / (batch_idx + 1),
@@ -185,6 +188,8 @@ for epoch in range(NUM_EPOCHS):
                                    loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
                                    tensor_to_word_fn=tensor_to_word_fn,
                                    data_loader=val_loader, vocab_size=vocab_size)
+        print(f'Epoch {epoch + 1}/{NUM_EPOCHS} '
+              f'val_belu4: {val_bleu4:.4f}')
         wandb.log({'val_bleu': val_bleu4})
         if val_bleu4 > val_bleu4_max:
             val_bleu4 = val_bleu4_max
@@ -198,7 +203,7 @@ for epoch in range(NUM_EPOCHS):
         torch.save(state, f'{MODEL_NAME}''_best_train.pt')
         wandb.save(f'{MODEL_NAME}''_best_train.pt')
 
-torch.save(final_model, f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
+torch.save(state, f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
 wandb.save(f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
 final_model.eval()
 
