@@ -1,7 +1,9 @@
 import itertools
+import os
 
 import numpy as np
 import torch
+import wandb
 from PIL import Image
 from nltk.translate.bleu_score import sentence_bleu
 from tqdm.auto import tqdm
@@ -154,3 +156,12 @@ def words_from_tensors_fn(idx2word, max_len=40, startseq='<start>', endseq='<end
         return captoks
 
     return words_from_tensors
+
+
+def sync_files_wandb(file_path_list):
+    for path in file_path_list:
+        if os.path.isfile(path) and os.access(path, os.R_OK):
+            wandb.save(path)
+            print(f'synced {path}')
+        else:
+            print("Either the file is missing or not readable")

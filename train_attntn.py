@@ -1,0 +1,284 @@
+# %%
+import pickle
+import wandb
+from matplotlib import pyplot as plt
+from torch.nn.utils.rnn import pack_padded_sequence
+from torch.utils.data import DataLoader
+from torchvision import transforms
+
+from datasets.flickr8k import Flickr8kDataset
+from glove import embedding_matrix_creator
+from metrics import *
+from utils_torch import *
+
+# %%
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+device
+# %%
+
+DATASET_BASE_PATH = 'data/flickr8k/'
+
+# %%
+
+train_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='train', device=device,
+                            return_type='tensor',
+                            load_img_to_memory=False)
+vocab, word2idx, idx2word, max_len = vocab_set = train_set.get_vocab()
+val_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='val', vocab_set=vocab_set, device=device,
+                          return_type='corpus',
+                          load_img_to_memory=False)
+test_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='test', vocab_set=vocab_set, device=device,
+                           return_type='corpus',
+                           load_img_to_memory=False)
+with open('vocab_set.pkl', 'wb') as f:
+    pickle.dump(train_set.get_vocab(), f)
+len(train_set), len(val_set), len(test_set)
+
+# %%
+vocab_size = len(vocab)
+vocab_size, max_len
+
+# %%
+
+MODEL = "resnet101_attention"
+EMBEDDING_DIM = 512
+EMBEDDING = f"{EMBEDDING_DIM}"
+ATTENTION_DIM = 512
+DECODER_SIZE = 512
+BATCH_SIZE = 16
+LR = 1e-3
+MODEL_NAME = f'saved_models/{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}'
+NUM_EPOCHS = 2
+SAVE_FREQ = 10
+LOG_INTERVAL = 25
+
+run = wandb.init(project='image-captioning',
+                 entity='datalab-buet',
+                 name=f"{MODEL}_b{BATCH_SIZE}_emd{EMBEDDING}-{1}",
+                 # tensorboard=True, sync_tensorboard=True,
+                 config={"learning_rate": LR,
+                         "epochs": NUM_EPOCHS,
+                         "batch_size": BATCH_SIZE,
+                         "model": MODEL,
+                         "embedding": EMBEDDING,
+                         "embedding_dim": EMBEDDING_DIM,
+                         "attention_dim": ATTENTION_DIM,
+                         "decoder_dim": DECODER_SIZE,
+                         },
+                 reinit=True)
+
+# %%
+embedding_matrix = None  # embedding_matrix_creator(embedding_dim=EMBEDDING_DIM, word2idx=word2idx)
+
+
+# embedding_matrix.shape
+
+
+# %%
+
+def train_model(train_loader, model, loss_fn, optimizer, vocab_size, acc_fn, desc=''):
+    running_acc = 0.0
+    running_loss = 0.0
+    model.train()
+    t = tqdm(iter(train_loader), desc=f'{desc}')
+    for batch_idx, batch in enumerate(t):
+        images, captions, lengths = batch
+        sort_ind = torch.argsort(lengths, descending=True)
+        # images = images[sort_ind]
+        # captions = captions[sort_ind]
+        # lengths = lengths[sort_ind]
+
+        optimizer.zero_grad()
+        # [sum_len, vocab_size]
+        # outputs = model(images, captions, lengths)
+        scores, caps_sorted, decode_lengths, alphas, sort_ind = model(images, captions, lengths)
+
+        # Since we decoded starting with <start>, the targets are all words after <start>, up to <end>
+        targets = caps_sorted[:, 1:]
+
+        # Remove timesteps that we didn't decode at, or are pads
+        # pack_padded_sequence is an easy trick to do this
+        scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
+        targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
+
+        loss = loss_fn(scores, targets)
+        loss.backward()
+        optimizer.step()
+
+        running_acc += (torch.argmax(scores, dim=1) == targets).sum().float().item() / targets.size(0)
+        running_loss += loss.item()
+        t.set_postfix({'loss': running_loss / (batch_idx + 1),
+                       'acc': running_acc / (batch_idx + 1),
+                       }, refresh=True)
+        if (batch_idx + 1) % LOG_INTERVAL == 0:
+            print(f'{desc} {batch_idx + 1}/{len(train_loader)} '
+                  f'train_loss: {running_loss / (batch_idx + 1):.4f} '
+                  f'train_acc: {running_acc / (batch_idx + 1):.4f}')
+            wandb.log({
+                'train_loss': running_loss / (batch_idx + 1),
+                'train_acc': running_acc / (batch_idx + 1),
+            })
+
+    return running_loss / len(train_loader)
+
+
+def evaluate_model(data_loader, model, loss_fn, vocab_size, bleu_score_fn, tensor_to_word_fn, desc=''):
+    running_bleu4 = 0.0
+    model.eval()
+    t = tqdm(iter(data_loader), desc=f'{desc}')
+    for batch_idx, batch in enumerate(t):
+        images, captions, lengths = batch
+        outputs = tensor_to_word_fn(model.sample(images, startseq_idx=word2idx['<start>']).cpu().numpy())
+
+        running_bleu4 += bleu_score_fn(reference_corpus=captions, candidate_corpus=outputs)
+        t.set_postfix({'bleu4': running_bleu4 / (batch_idx + 1),
+                       }, refresh=True)
+
+    return running_bleu4 / len(data_loader)
+
+
+# %%
+
+from models.torch.resnet101_attention import Captioner
+
+final_model = Captioner(encoded_image_size=14, encoder_dim=2048,
+                        attention_dim=ATTENTION_DIM, embed_dim=EMBEDDING_DIM, decoder_dim=DECODER_SIZE,
+                        vocab_size=vocab_size,
+                        embedding_matrix=embedding_matrix, train_embd=False).to(device)
+
+loss_fn = torch.nn.CrossEntropyLoss(ignore_index=train_set.pad_value).to(device)
+acc_fn = accuracy_fn(ignore_value=train_set.pad_value)
+sentence_bleu_score_fn = bleu_score_fn(4, 'sentence')
+corpus_bleu_score_fn = bleu_score_fn(4, 'corpus')
+tensor_to_word_fn = words_from_tensors_fn(idx2word=idx2word)
+
+params = list(final_model.decoder.parameters()) + list(final_model.encoder.parameters())
+
+optimizer = torch.optim.Adam(params=params, lr=LR)
+
+wandb.watch(final_model, log='all', log_freq=50)
+wandb.watch(final_model.encoder, log='all', log_freq=50)
+wandb.watch(final_model.decoder, log='all', log_freq=50)
+wandb.save('vocab_set.pkl')
+
+sync_files_wandb(['models/torch/resnet101_attention.py'])
+
+# %%
+train_transformations = transforms.Compose([
+    transforms.Resize(256),  # smaller edge of image resized to 256
+    transforms.RandomCrop(256),  # get 256x256 crop from random location
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.ToTensor(),  # convert the PIL Image to a tensor
+    transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
+                         (0.229, 0.224, 0.225))
+])
+eval_transformations = transforms.Compose([
+    transforms.Resize(256),  # smaller edge of image resized to 256
+    transforms.CenterCrop(256),  # get 256x256 crop from random location
+    transforms.ToTensor(),  # convert the PIL Image to a tensor
+    transforms.Normalize((0.485, 0.456, 0.406),  # normalize image for pre-trained model
+                         (0.229, 0.224, 0.225))
+])
+
+train_set.transformations = train_transformations
+val_set.transformations = eval_transformations
+test_set.transformations = eval_transformations
+
+# %%
+eval_collate_fn = lambda batch: (torch.stack([x[0] for x in batch]), [x[1] for x in batch], [x[2] for x in batch])
+train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=True, sampler=None, pin_memory=False)
+val_loader = DataLoader(val_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None, pin_memory=False,
+                        collate_fn=eval_collate_fn)
+test_loader = DataLoader(test_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None, pin_memory=False,
+                         collate_fn=eval_collate_fn)
+# %%
+train_loss_min = 100
+val_bleu4_max = 0.0
+for epoch in range(NUM_EPOCHS):
+    train_loss = train_model(desc=f'Epoch {epoch + 1}/{NUM_EPOCHS}', model=final_model,
+                             optimizer=optimizer, loss_fn=loss_fn, acc_fn=acc_fn,
+                             train_loader=train_loader, vocab_size=vocab_size)
+    state = {
+        'epoch': epoch + 1,
+        'state_dict': final_model.state_dict(),
+        'optimizer': optimizer.state_dict()
+    }
+    if train_loss < train_loss_min:
+        train_loss_min = train_loss
+        torch.save(state, f'{MODEL_NAME}''_best_train.pt')
+        wandb.save(f'{MODEL_NAME}''_best_train.pt')
+    with torch.no_grad():
+        val_bleu4 = evaluate_model(desc=f'Epoch {epoch + 1}/{NUM_EPOCHS} Validation', model=final_model,
+                                   loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                                   tensor_to_word_fn=tensor_to_word_fn,
+                                   data_loader=val_loader, vocab_size=vocab_size)
+        print(f'Epoch {epoch + 1}/{NUM_EPOCHS} '
+              f'val_belu4: {val_bleu4:.4f}')
+        wandb.log({'val_bleu': val_bleu4})
+        if val_bleu4 > val_bleu4_max:
+            val_bleu4 = val_bleu4_max
+            torch.save(state, f'{MODEL_NAME}''_best_val.pt')
+            wandb.save(f'{MODEL_NAME}''_best_val.pt')
+
+    if (epoch + 1) % SAVE_FREQ == 0:
+        torch.save(state, f'{MODEL_NAME}_ep{epoch + 1:02d}_weights.pt')
+
+torch.save(state, f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
+wandb.save(f'{MODEL_NAME}_ep{NUM_EPOCHS:02d}_weights.pt')
+final_model.eval()
+
+# %%
+model = final_model
+
+# %%
+t_i = 1003
+dset = train_set
+im, cp, _ = dset[t_i]
+print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
+print(dset.get_image_captions(t_i)[1])
+
+plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
+
+# %%
+t_i = 500
+dset = val_set
+im, cp, _ = dset[t_i]
+print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
+print(cp)
+
+plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
+
+# %%
+t_i = 500
+dset = test_set
+im, cp, _ = dset[t_i]
+print(''.join([idx2word[idx.item()] + ' ' for idx in model.sample(im.unsqueeze(0))[0]]))
+print(cp)
+
+plt.imshow(dset[t_i][0].detach().cpu().permute(1, 2, 0), interpolation="bicubic")
+
+# %%
+train_eval_set = Flickr8kDataset(dataset_base_path=DATASET_BASE_PATH, dist='train', vocab_set=vocab_set, device=device,
+                                 return_type='corpus', transformations=eval_transformations)
+train_eval_loader = DataLoader(train_eval_set, batch_size=BATCH_SIZE, shuffle=False, sampler=None, pin_memory=False,
+                               collate_fn=eval_collate_fn)
+with torch.no_grad():
+    model.eval()
+    train_bleu4 = evaluate_model(desc=f'Train: ', model=final_model,
+                                 loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                                 tensor_to_word_fn=tensor_to_word_fn,
+                                 data_loader=train_eval_loader, vocab_size=vocab_size)
+    val_bleu4 = evaluate_model(desc=f'Val: ', model=final_model,
+                               loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                               tensor_to_word_fn=tensor_to_word_fn,
+                               data_loader=val_loader, vocab_size=vocab_size)
+    test_bleu4 = evaluate_model(desc=f'Test: ', model=final_model,
+                                loss_fn=loss_fn, bleu_score_fn=corpus_bleu_score_fn,
+                                tensor_to_word_fn=tensor_to_word_fn,
+                                data_loader=test_loader, vocab_size=vocab_size)
+    print('Train Bleu-4:', train_bleu4)
+    print('Valid Bleu-4:', val_bleu4)
+    print('Test Bleu-4:', test_bleu4)
+    wandb.run.summary["train_bleu4"] = train_bleu4
+    wandb.run.summary["val_bleu4"] = val_bleu4
+    wandb.run.summary["test_bleu4"] = test_bleu4
