@@ -2,6 +2,8 @@ import torch
 from torch import nn
 import torchvision
 
+from models.torch.layers import embedding_layer
+
 
 class Encoder(nn.Module):
     """
@@ -89,7 +91,8 @@ class DecoderWithAttention(nn.Module):
     Decoder.
     """
 
-    def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, encoder_dim=2048, dropout=0.5):
+    def __init__(self, attention_dim, embed_dim, decoder_dim, vocab_size, encoder_dim=2048, dropout=0.5,
+                 embedding_matrix=None, train_embd=True):
         """
         :param attention_dim: size of attention network
         :param embed_dim: embedding size
@@ -109,7 +112,8 @@ class DecoderWithAttention(nn.Module):
 
         self.attention = Attention(encoder_dim, decoder_dim, attention_dim)  # attention network
 
-        self.embedding = nn.Embedding(vocab_size, embed_dim)  # embedding layer
+        self.embedding = embedding_layer(num_embeddings=vocab_size, embedding_dim=embed_dim,
+                                         embedding_matrix=embedding_matrix, trainable=train_embd)
         self.dropout = nn.Dropout(p=self.dropout)
         self.decode_step = nn.LSTMCell(embed_dim + encoder_dim, decoder_dim, bias=True)  # decoding LSTMCell
         self.init_h = nn.Linear(encoder_dim, decoder_dim)  # linear layer to find initial hidden state of LSTMCell
