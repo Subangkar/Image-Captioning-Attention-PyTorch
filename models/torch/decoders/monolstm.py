@@ -62,6 +62,7 @@ class Decoder(nn.Module):
         sentences. This is the beam search approach.
         features = [b, embed_dim]
         """
+        # [b, 1, embed_dim]
         inputs = features.unsqueeze(1)
         # Top word idx sequences and their corresponding inputs and states
         idx_sequences = [[[], 0.0, inputs, states]]
@@ -70,20 +71,29 @@ class Decoder(nn.Module):
             all_candidates = []
             # Predict the next word idx for each of the top sequences
             for idx_seq in idx_sequences:
+                # [b, 1, hidden_size]
                 hiddens, states = self.lstm(idx_seq[2], idx_seq[3])
+                # [b, 1, hidden_size] -> [b, hidden_size] -> [b, vocab_size]
                 outputs = self.linear(hiddens.squeeze(1))
                 # Transform outputs to log probabilities to avoid floating-point
                 # underflow caused by multiplying very small probabilities
+                # [b, vocab_size]
                 log_probs = F.log_softmax(outputs, -1)
+                # [b, k]
                 top_log_probs, top_idx = log_probs.topk(beam_width, 1)
+                # [k]
                 top_idx = top_idx.squeeze(0)
                 # create a new set of top sentences for next round
                 for i in range(beam_width):
+                    # idx_seq = [[i1, i2], 0.5, [b, 1, embed_dim], [b, 1, hidden_size]]
                     next_idx_seq, log_prob = idx_seq[0][:], idx_seq[1]
+                    # idx_seq = [[top_idx(i)..,], 0.0, [b, 1, embed_dim], [b, 1, hidden_size]]
                     next_idx_seq.append(top_idx[i].item())
+                    # idx_seq = [[top_idx(i)..,], top_log_probs(0)(i), [b, 1, embed_dim], [b, 1, hidden_size]]
                     log_prob += top_log_probs[0][i].item()
                     # Indexing 1-dimensional top_idx gives 0-dimensional tensors.
                     # We have to expand dimensions before embedding them
+                    # [1] -> [1, embed_dim]-> [1, 1, embed_dim]
                     inputs = self.embed(top_idx[i].unsqueeze(0)).unsqueeze(0)
                     all_candidates.append([next_idx_seq, log_prob, inputs, states])
             # Keep only the top sequences according to their total log probability
