@@ -216,6 +216,7 @@ for epoch in range(NUM_EPOCHS):
               ''.join([f'val_bleu{i}: {val_bleu[i]:.4f} ' for i in (1, 4)]),
               )
         wandb.log({f'val_bleu{i}': val_bleu[i] for i in (1, 2, 3, 4)})
+        wandb.log({'train_bleu': train_bleu[4]})
         wandb.log({'val_bleu': val_bleu[4]})
         state = {
             'epoch': epoch + 1,
