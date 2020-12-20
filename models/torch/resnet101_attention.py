@@ -37,7 +37,7 @@ class Encoder(nn.Module):
         out = out.permute(0, 2, 3, 1)  # (batch_size, encoded_image_size, encoded_image_size, 2048)
         return out
 
-    def fine_tune(self, fine_tune=True):
+    def fine_tune(self, fine_tune=False):
         """
         Allow or prevent the computation of gradients for convolutional blocks 2 through 4 of the encoder.
 

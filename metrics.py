@@ -11,19 +11,25 @@ def bleu_score_fn(method_no: int = 4, ref_type='corpus'):
     """
     smoothing_method = getattr(SmoothingFunction(), f'method{method_no}')
 
-    def bleu_score_corpus(reference_corpus: list, candidate_corpus: list):
+    def bleu_score_corpus(reference_corpus: list, candidate_corpus: list, n: int = 4):
         """
         :param reference_corpus: [b, 5, var_len]
         :param candidate_corpus: [b, var_len]
+        :param n: size of n-gram
         """
-        return corpus_bleu(reference_corpus, candidate_corpus, smoothing_function=smoothing_method)
+        weights = [1 / n] * n
+        return corpus_bleu(reference_corpus, candidate_corpus,
+                           smoothing_function=smoothing_method, weights=weights)
 
-    def bleu_score_sentence(reference_sentences: list, candidate_sentence: list):
+    def bleu_score_sentence(reference_sentences: list, candidate_sentence: list, n: int = 4):
         """
         :param reference_sentences: [5, var_len]
         :param candidate_sentence: [var_len]
+        :param n: size of n-gram
         """
-        return sentence_bleu(reference_sentences, candidate_sentence, smoothing_function=smoothing_method)
+        weights = [1 / n] * n
+        return sentence_bleu(reference_sentences, candidate_sentence,
+                             smoothing_function=smoothing_method, weights=weights)
 
     if ref_type == 'corpus':
         return bleu_score_corpus
