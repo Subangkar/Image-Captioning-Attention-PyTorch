@@ -141,10 +141,10 @@ class DecoderWithAttention(nn.Module):
         Creates the initial hidden and cell states for the decoder's LSTM based on the encoded images.
 
         :param encoder_out: encoded images, a tensor of dimension (batch_size, num_pixels, encoder_dim)
-        :return: hidden state, cell state
+        :return: hidden state, cell state [b, decoder_dim]
         """
         mean_encoder_out = encoder_out.mean(dim=1)
-        h = self.init_h(mean_encoder_out)  # (batch_size, decoder_dim)
+        h = self.init_h(mean_encoder_out)
         c = self.init_c(mean_encoder_out)
         return h, c
 
@@ -241,7 +241,6 @@ class DecoderWithAttention(nn.Module):
             awe, alpha = self.attention(encoder_out, h)
             # [b, enc_image_size, enc_image_size] -> [b, 1, enc_image_size, enc_image_size]
             alpha = alpha.view(-1, enc_image_size, enc_image_size).unsqueeze(1)
-            alphas.append(alpha)
 
             # [b, embed_dim]
             gate = self.sigmoid(self.f_beta(h))  # gating scalar
@@ -256,12 +255,13 @@ class DecoderWithAttention(nn.Module):
             predicted = predicted_prob.argmax(1)
 
             sampled_ids.append(predicted)
+            alphas.append(alpha)
 
             # [b] -> [b, 1]
             prev_timestamp_words = predicted.unsqueeze(1)
         # [b, max_len]
         sampled_ids = torch.stack(sampled_ids, 1)
-        return sampled_ids, torch.cat(alphas, 1) if return_alpha else sampled_ids
+        return (sampled_ids, torch.cat(alphas, 1)) if return_alpha else sampled_ids
 
 
 class Captioner(nn.Module):
@@ -283,6 +283,7 @@ class Captioner(nn.Module):
         decoder_out = self.decoder(encoder_out, encoded_captions, caption_lengths.unsqueeze(1))
         return decoder_out
 
-    def sample(self, images, startseq_idx, endseq_idx=-1, max_len=40):
+    def sample(self, images, startseq_idx, endseq_idx=-1, max_len=40, return_alpha=False):
         encoder_out = self.encoder(images)
-        return self.decoder.sample(encoder_out=encoder_out, startseq_idx=startseq_idx, max_len=max_len)
+        return self.decoder.sample(encoder_out=encoder_out, startseq_idx=startseq_idx, max_len=max_len,
+                                   return_alpha=return_alpha)
