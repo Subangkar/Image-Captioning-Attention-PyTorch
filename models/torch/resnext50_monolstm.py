@@ -6,7 +6,7 @@ from models.torch.decoders.monolstm import Decoder
 
 class Encoder(nn.Module):
     def __init__(self, embed_size):
-        """Load the pretrained ResNet-50 and replace top fc layer."""
+        """Load the pretrained ResNext-50 and replace top fc layer."""
         super(Encoder, self).__init__()
         resnext = torch.hub.load('pytorch/vision:v0.6.0', 'resnext50_32x4d', pretrained=True)
         modules = list(resnext.children())[:-1]
