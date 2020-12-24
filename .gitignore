@@ -3,6 +3,7 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=pycharm,python,jupyternotebooks
 
 *.zip
+wandb/**
 
 ### JupyterNotebooks ###
 # gitignore template for Jupyter Notebooks
