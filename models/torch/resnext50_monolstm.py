@@ -43,3 +43,8 @@ class Captioner(nn.Module):
         features = self.encoder(images)
         captions = self.decoder.sample(features=features, max_len=max_len, endseq_idx=endseq_idx)
         return captions
+
+    def sample_beam_search(self, images, max_len=40, endseq_idx=-1, beam_width=5):
+        features = self.encoder(images)
+        captions = self.decoder.sample_beam_search(features=features, max_len=max_len, beam_width=beam_width)
+        return captions
