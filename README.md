@@ -1,7 +1,7 @@
-#Image-Captioning-PyTorch
+# Image-Captioning-PyTorch
 This repo contains codes to preprocess, train and evaluate sequence models on Flickr8k Image dataset in pytorch. This repo was a part of a Deep Learning Project for the Machine Learning Sessional course of Department of CSE, BUET for the session January-2020.
 
-Models Experimented with:
+**Models Experimented with**:
 - Pretrained CNN encoder & LSTM based Decoder
     - VGG-16, Inception-v3, Resnet-50, Resnet-101, Resnext-101, Densenet-201
 - Pretrained Resnet-101 & LSTM with Attention Mechanism
