@@ -1,12 +1,11 @@
-keras
 torch
 torchvision
 tqdm
 pillow
-tensorflow
 ipython
 numpy
 pandas
 nltk
 matplotlib
 wandb
+scikit-image

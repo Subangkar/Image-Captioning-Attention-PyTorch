@@ -1,3 +1,7 @@
+"""
+This model's basic architecture has been adapted from https://github.com/sgrvinod/a-PyTorch-Tutorial-to-Image-Captioning
+"""
+
 import torch
 from torch import nn
 import torchvision
