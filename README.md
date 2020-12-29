@@ -32,5 +32,8 @@ data/
         glove.6B.300d.txt
 ```
 
+**Pretrained Models**:  
+Some pre-trained weights are provided [here](https://drive.google.com/drive/folders/16e_bNz92M5g3Myp2kKbGZcXIkDTjasP-?usp=sharing)
+
 **Bleu score comparision of trained models**:
 ![alt text](artifacts/bleu_scores.png "Bleu Scores Comparision of some trained models")
